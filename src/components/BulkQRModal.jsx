@@ -1,5 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import QRCode from 'qrcode';
+
+
 import { 
     X, Download, FileText, RefreshCw, Loader, AlertCircle,
     Package, Printer, Settings, Globe, Building, User
@@ -223,278 +226,121 @@ const BulkQRModal = ({ isOpen, onClose, products: initialProducts }) => {
     );
 
     // Enhanced PDF generation with company logo
-    const generatePDF = async () => {
-        if (selectedProductObjects.length === 0) {
-            alert('Please select at least one product to generate QR codes');
-            return;
-        }
+  // BETTER SOLUTION: Use the QRCodeSVG component properly
+const generatePDF = async () => {
+  if (selectedProductObjects.length === 0) {
+    alert('Please select at least one product');
+    return;
+  }
 
-        setGeneratingPDF(true);
-        
-        try {
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pageWidth = 210;
-            const pageHeight = 297;
-            const margin = 15;
-            const qrSize = 40;
-            const colGap = 10;
-            const rowGap = 20;
-            const cols = 4; // 4 QR codes per row
-            const labelHeight = 25;
+  setGeneratingPDF(true);
 
-            const contentWidth = pageWidth - (2 * margin);
-            const colWidth = (contentWidth - (cols - 1) * colGap) / cols;
+  try {
+    const pdf = new jsPDF('p', 'mm', 'a4');
 
-            let currentRow = 0;
-            let currentCol = 0;
-            let yOffset = margin;
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const margin = 15;
 
-            // Add header with logo and company info
-            // First, load the logo image
-            const loadLogo = () => {
-                return new Promise((resolve, reject) => {
-                    const img = new Image();
-                    img.crossOrigin = 'Anonymous';
-                    img.onload = () => resolve(img);
-                    img.onerror = reject;
-                    img.src = CompanyLogo;
-                });
-            };
+    const qrSize = 38; // mm
+    const colGap = 10;
+    const rowGap = 18;
+    const cols = 4;
 
-            let logoImg;
-            try {
-                logoImg = await loadLogo();
-            } catch (err) {
-                console.log('Logo not loaded, using fallback');
-                logoImg = null;
-            }
+    let x = margin;
+    let y = margin + 10;
+    let col = 0;
 
-            // Draw header
-            pdf.setFillColor(240, 247, 255); // Light blue background
-            pdf.rect(0, 0, pageWidth, 25, 'F');
-            
-            // Draw company name
-            pdf.setFontSize(16);
-            pdf.setFont('helvetica', 'bold');
-            pdf.setTextColor(14, 165, 233); // Light blue
-            pdf.text('AssetTrack Pro', pageWidth / 2, 15, { align: 'center' });
-            
-            // Draw title
-            pdf.setFontSize(12);
-            pdf.setTextColor(30, 41, 59); // Dark slate
-            pdf.text('Product QR Codes', pageWidth / 2, 23, { align: 'center' });
-            
-            // Draw generation info
-            pdf.setFontSize(9);
-            pdf.setTextColor(100, 116, 139); // Slate
-            const dateStr = new Date().toLocaleDateString('en-IN', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric'
-            });
-            pdf.text(`Generated: ${dateStr}`, margin, 35);
-            pdf.text(`Total: ${selectedProductObjects.length} products`, pageWidth - margin, 35, { align: 'right' });
-            
-            yOffset = 45; // Start QR codes below header
+    // 🔹 Load logo once
+    const logoImg = new Image();
+    logoImg.src = CompanyLogo;
+    await new Promise((res) => (logoImg.onload = res));
 
-            // Process each selected product
-            for (let i = 0; i < selectedProductObjects.length; i++) {
-                const product = selectedProductObjects[i];
-                const productUrl = `${baseUrl}/#/product/${product.sn}`;
+    for (let i = 0; i < selectedProductObjects.length; i++) {
+      const product = selectedProductObjects[i];
+      const productUrl = `${baseUrl}/#/product/${product.sn}`;
 
-                // Calculate position
-                const xPos = margin + currentCol * (colWidth + colGap);
-                const centerX = xPos + colWidth / 2;
+      // 1️⃣ Create canvas
+      const canvas = document.createElement('canvas');
+      const size = 512;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
 
-                // Check if we need a new page
-                if (yOffset + qrSize + labelHeight + rowGap > pageHeight - margin) {
-                    pdf.addPage();
-                    
-                    // Add header to new page
-                    pdf.setFillColor(240, 247, 255);
-                    pdf.rect(0, 0, pageWidth, 25, 'F');
-                    pdf.setFontSize(10);
-                    pdf.setTextColor(100, 116, 139);
-                    pdf.text(`Page ${pdf.internal.pages.length - 1}`, pageWidth / 2, 20, { align: 'center' });
-                    
-                    yOffset = margin;
-                    currentRow = 0;
-                    currentCol = 0;
-                }
+      // 2️⃣ Generate QR
+     await QRCode.toCanvas(canvas, productUrl, {
+  width: size,
+  margin: 4, // IMPORTANT: quiet zone
+  errorCorrectionLevel: 'H',
+  color: {
+    dark: '#0f172a',
+    light: '#ffffff',
+  },
+});
 
-                // Generate QR code with html2canvas
-                const tempDiv = document.createElement('div');
-                tempDiv.style.position = 'absolute';
-                tempDiv.style.left = '-9999px';
-                tempDiv.style.width = '200px';
-                tempDiv.style.height = '200px';
-                tempDiv.style.backgroundColor = 'white';
-                document.body.appendChild(tempDiv);
+         const logoSize = size * 0.16; // ✅ 16% ONLY
+        const logoX = (size - logoSize) / 2;
+        const logoY = (size - logoSize) / 2;
 
-                // Create QR code element
-                const qrDiv = document.createElement('div');
-                qrDiv.style.width = '200px';
-                qrDiv.style.height = '200px';
-                qrDiv.style.display = 'flex';
-                qrDiv.style.alignItems = 'center';
-                qrDiv.style.justifyContent = 'center';
-                qrDiv.style.backgroundColor = 'white';
-                qrDiv.style.position = 'relative';
-                tempDiv.appendChild(qrDiv);
+     ctx.fillStyle = '#ffffff';
+ctx.fillRect(
+  logoX - 14,
+  logoY - 14,
+  logoSize + 28,
+  logoSize + 28
+);
+      // 4️⃣ Draw logo
+ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
 
-                // Add QR code SVG
-                const qrSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                qrSvg.setAttribute('width', '180');
-                qrSvg.setAttribute('height', '180');
-                qrSvg.setAttribute('viewBox', '0 0 180 180');
-                
-                // Create a simple QR code pattern (simplified for demo)
-                // In production, use a proper QR code library
-                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                rect.setAttribute('x', '10');
-                rect.setAttribute('y', '10');
-                rect.setAttribute('width', '160');
-                rect.setAttribute('height', '160');
-                rect.setAttribute('fill', '#ffffff');
-                rect.setAttribute('stroke', '#0f172a');
-                rect.setAttribute('stroke-width', '2');
-                qrSvg.appendChild(rect);
-                
-                // Add product SN text as fallback
-                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                text.setAttribute('x', '90');
-                text.setAttribute('y', '100');
-                text.setAttribute('text-anchor', 'middle');
-                text.setAttribute('font-family', 'Arial, sans-serif');
-                text.setAttribute('font-size', '20');
-                text.setAttribute('fill', '#0f172a');
-                text.textContent = product.sn.substring(0, 8);
-                qrSvg.appendChild(text);
-                
-                qrDiv.appendChild(qrSvg);
+      // 5️⃣ Convert to image
+      const qrImage = canvas.toDataURL('image/png');
 
-                // Add logo overlay
-                const logoDiv = document.createElement('div');
-                logoDiv.style.position = 'absolute';
-                logoDiv.style.top = '50%';
-                logoDiv.style.left = '50%';
-                logoDiv.style.transform = 'translate(-50%, -50%)';
-                logoDiv.style.width = '30px';
-                logoDiv.style.height = '30px';
-                logoDiv.style.backgroundColor = 'white';
-                logoDiv.style.border = '2px solid #0ea5e9';
-                logoDiv.style.borderRadius = '4px';
-                logoDiv.style.display = 'flex';
-                logoDiv.style.alignItems = 'center';
-                logoDiv.style.justifyContent = 'center';
-                
-                if (logoImg) {
-                    const logo = document.createElement('img');
-                    logo.src = CompanyLogo;
-                    logo.style.width = '24px';
-                    logo.style.height = '24px';
-                    logo.style.objectFit = 'contain';
-                    logoDiv.appendChild(logo);
-                } else {
-                    logoDiv.style.backgroundColor = '#0ea5e9';
-                    logoDiv.innerHTML = '<span style="color: white; font-size: 12px; font-weight: bold;">C</span>';
-                }
-                
-                qrDiv.appendChild(logoDiv);
+      // 6️⃣ Page break
+      if (y + qrSize > pageHeight - margin) {
+        pdf.addPage();
+        x = margin;
+        y = margin;
+        col = 0;
+      }
 
-                // Convert to image
-                const canvas = await html2canvas(qrDiv, {
-                    backgroundColor: '#ffffff',
-                    scale: 2, // Higher quality
-                    useCORS: true,
-                    logging: false
-                });
+      // 7️⃣ Add QR to PDF
+      pdf.addImage(qrImage, 'PNG', x, y, qrSize, qrSize);
 
-                const imgData = canvas.toDataURL('image/png');
+      // 8️⃣ Labels
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(product.sn, x + qrSize / 2, y + qrSize + 4, { align: 'center' });
 
-                // Clean up
-                document.body.removeChild(tempDiv);
+      pdf.setFontSize(6);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(
+        product.productName?.substring(0, 20) || '',
+        x + qrSize / 2,
+        y + qrSize + 8,
+        { align: 'center' }
+      );
 
-                // Draw QR code centered in column
-                const qrX = centerX - qrSize / 2;
-                pdf.addImage(imgData, 'PNG', qrX, yOffset, qrSize, qrSize);
+      // 9️⃣ Grid layout
+      col++;
+      if (col >= cols) {
+        col = 0;
+        x = margin;
+        y += qrSize + rowGap;
+      } else {
+        x += qrSize + colGap;
+      }
+    }
 
-                // Draw border around QR code
-                pdf.setDrawColor(200, 200, 200);
-                pdf.rect(qrX - 1, yOffset - 1, qrSize + 2, qrSize + 2);
+    pdf.save(`asset-qrcodes-${Date.now()}.pdf`);
+  } catch (err) {
+    console.error('QR PDF error:', err);
+    alert('Failed to generate QR PDF');
+  } finally {
+    setGeneratingPDF(false);
+  }
+};
 
-                // Draw serial number
-                pdf.setFontSize(8);
-                pdf.setFont('helvetica', 'bold');
-                pdf.setTextColor(30, 41, 59);
-                const serialNo = product.sn || `SN-${i + 1}`;
-                pdf.text(serialNo, centerX, yOffset + qrSize + 4, { align: 'center' });
 
-                // Draw product name (truncated)
-                pdf.setFontSize(6);
-                pdf.setFont('helvetica', 'normal');
-                pdf.setTextColor(71, 85, 105);
-                let productName = product.productName || 'Product';
-                const maxWidth = colWidth - 6;
-                
-                // Truncate if too long
-                if (pdf.getTextWidth(productName) > maxWidth) {
-                    while (pdf.getTextWidth(productName + '...') > maxWidth && productName.length > 3) {
-                        productName = productName.slice(0, -1);
-                    }
-                    productName += '...';
-                }
-                pdf.text(productName, centerX, yOffset + qrSize + 8, { align: 'center' });
-
-                // Draw additional info
-                if (product.brand || product.location) {
-                    pdf.setFontSize(5);
-                    pdf.setTextColor(148, 163, 184);
-                    const info = [];
-                    if (product.brand) info.push(product.brand);
-                    if (product.location) info.push(product.location.substring(0, 10));
-                    
-                    if (info.length > 0) {
-                        pdf.text(info.join(' • '), centerX, yOffset + qrSize + 12, { align: 'center' });
-                    }
-                }
-
-                // Draw URL (very small)
-                pdf.setFontSize(4);
-                pdf.setTextColor(148, 163, 184);
-                const url = `${baseUrl}/#/product/${serialNo}`;
-                pdf.text('Scan for details', centerX, yOffset + qrSize + 16, { align: 'center' });
-
-                // Move to next position
-                currentCol++;
-                if (currentCol >= cols) {
-                    currentCol = 0;
-                    currentRow++;
-                    yOffset += qrSize + labelHeight + rowGap;
-                }
-            }
-
-            // Add footer on last page
-            pdf.setFontSize(8);
-            pdf.setTextColor(100, 116, 139);
-            const pageCount = pdf.internal.pages.length - 1;
-            pdf.text(
-                `Page ${pageCount} of ${pageCount} • Generated by AssetTrack Pro • ${selectedProductObjects.length} products`,
-                pageWidth / 2,
-                pageHeight - 10,
-                { align: 'center' }
-            );
-
-            // Save the PDF
-            pdf.save(`asset-qr-codes-${new Date().toISOString().slice(0, 10)}.pdf`);
-            
-        } catch (err) {
-            console.error('Error generating PDF:', err);
-            alert('Failed to generate PDF. Please try again.');
-        } finally {
-            setGeneratingPDF(false);
-        }
-    };
 
     const refreshProducts = () => {
         fetchProductsFromGoogleSheets();

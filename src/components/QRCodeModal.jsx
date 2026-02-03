@@ -113,105 +113,92 @@ const QRCodeModal = ({ isOpen, onClose, product }) => {
     };
 
     // Handle download with logo
-    const handleDownload = () => {
-        try {
-            const svg = document.getElementById('qr-code-svg');
-            if (!svg) {
-                console.error('QR Code SVG not found');
-                return;
-            }
+    const handleDownload = async () => {
+  try {
+    const svg = document.getElementById('qr-code-svg');
+    if (!svg) {
+      alert('QR code not found');
+      return;
+    }
 
-            const svgData = new XMLSerializer().serializeToString(svg);
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-            const logoImg = new Image();
+    const svgData = new XMLSerializer().serializeToString(svg);
 
-            // First load the logo
-            logoImg.onload = () => {
-                img.onload = () => {
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    
-                    // Set white background
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Draw QR code
-                    ctx.drawImage(img, 0, 0);
-                    
-                    // Calculate logo position (center of QR code)
-                    const logoSize = canvas.width * 0.18; // 18% of QR code size
-                    const logoX = (canvas.width - logoSize) / 2;
-                    const logoY = (canvas.height - logoSize) / 2;
-                    
-                    // Draw white background for logo
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(logoX - 4, logoY - 4, logoSize + 8, logoSize + 8);
-                    
-                    // Draw logo
-                    ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
-                    
-                    // Add a border around logo
-                    ctx.strokeStyle = '#0ea5e9';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(logoX - 4, logoY - 4, logoSize + 8, logoSize + 8);
-                    
-                    // Convert to PNG and download
-                    const pngFile = canvas.toDataURL('image/png');
-                    const downloadLink = document.createElement('a');
-                    const fileName = productDetails?.sn ? `QR-${productDetails.sn}.png` : 'product-qr.png';
-                    downloadLink.download = fileName;
-                    downloadLink.href = pngFile;
-                    document.body.appendChild(downloadLink);
-                    downloadLink.click();
-                    document.body.removeChild(downloadLink);
-                };
+    // 🔥 High resolution canvas
+    const SIZE = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = SIZE;
+    canvas.height = SIZE;
+    const ctx = canvas.getContext('2d');
 
-                img.onerror = () => {
-                    console.error('Failed to load QR code image');
-                    alert('Failed to generate QR code image');
-                };
+    // ❌ Disable smoothing (VERY IMPORTANT)
+    ctx.imageSmoothingEnabled = false;
 
-                img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-            };
+    // Load QR SVG
+    const qrImg = new Image();
+    const logoImg = new Image();
 
-            logoImg.onerror = () => {
-                console.error('Failed to load logo');
-                // Fallback without logo
-                img.onload = () => {
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    
-                    // Set white background
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Draw QR code
-                    ctx.drawImage(img, 0, 0);
-                    
-                    // Convert to PNG and download
-                    const pngFile = canvas.toDataURL('image/png');
-                    const downloadLink = document.createElement('a');
-                    const fileName = productDetails?.sn ? `QR-${productDetails.sn}.png` : 'product-qr.png';
-                    downloadLink.download = fileName;
-                    downloadLink.href = pngFile;
-                    document.body.appendChild(downloadLink);
-                    downloadLink.click();
-                    document.body.removeChild(downloadLink);
-                };
+    qrImg.src =
+      'data:image/svg+xml;base64,' +
+      btoa(unescape(encodeURIComponent(svgData)));
 
-                img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-            };
+    logoImg.src = CompanyLogo;
 
-            // Start loading the logo
-            logoImg.src = CompanyLogo;
+    await Promise.all([
+      new Promise((res) => (qrImg.onload = res)),
+      new Promise((res) => (logoImg.onload = res)),
+    ]);
 
-        } catch (err) {
-            console.error('Error downloading QR code:', err);
-            alert('Error downloading QR code. Please try again.');
-        }
-    };
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+
+    // Draw QR
+    ctx.drawImage(qrImg, 0, 0, SIZE, SIZE);
+
+    // 🟢 SAFE logo size (16%)
+    const logoSize = SIZE * 0.16;
+    const logoX = (SIZE - logoSize) / 2;
+    const logoY = (SIZE - logoSize) / 2;
+
+    // Strong quiet zone
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(
+      logoX - 20,
+      logoY - 20,
+      logoSize + 40,
+      logoSize + 40
+    );
+
+    // Draw logo (crisp)
+    ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+
+    // Optional border
+    ctx.strokeStyle = '#0ea5e9';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(
+      logoX - 20,
+      logoY - 20,
+      logoSize + 40,
+      logoSize + 40
+    );
+
+    // ✅ Export as BLOB (best quality)
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QR-${productDetails?.sn || 'product'}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  } catch (err) {
+    console.error(err);
+    alert('Failed to download QR code');
+  }
+};
+
 
     const handleCopyUrl = async () => {
         const productUrl = `${baseUrl}/#/product/${productDetails?.sn || product?.sn}`;

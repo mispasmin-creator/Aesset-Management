@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, RefreshCw, QrCode, FileText, Pencil, AlertCircle, Loader, ChevronRight } from 'lucide-react';
+import { Plus, Search, Filter, RefreshCw, QrCode, FileText, Pencil, AlertCircle, Loader } from 'lucide-react';
 import { useProduct } from '../context/ProductContext';
 import AddProductModal from '../components/AddProductModal';
 import QRCodeModal from '../components/QRCodeModal';
 import BulkQRModal from '../components/BulkQRModal';
 
-// Product Card for Mobile View
+// Product Card for Mobile View (unchanged)
 const ProductCard = ({ product, onShowQR, onEdit }) => {
-    console.log('Product card data:', product); // Debug log
+    console.log('Product card data:', product);
     
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 space-y-4">
             {/* Header: SN & Actions */}
             <div className="flex items-center justify-between">
                 <span className="font-mono font-bold text-light-blue-600 bg-light-blue-50 px-2 py-0.5 rounded text-sm">
-                    {product.sn || 'N/A'}
+                    {product.serialNo || product.sn || 'N/A'}
                 </span>
                 <div className="flex items-center gap-1">
                     <button onClick={() => onEdit(product)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
@@ -55,7 +55,7 @@ const ProductCard = ({ product, onShowQR, onEdit }) => {
                 <div className="text-center border-l border-slate-100">
                     <p className="text-[10px] text-slate-400 uppercase tracking-wide">Value</p>
                     <p className="text-xs font-semibold text-green-700">
-                        ₹{product.assetValue ? product.assetValue.toLocaleString('en-IN') : '0'}
+                        ₹{product.assetValue || product.cost ? (product.assetValue || product.cost).toLocaleString('en-IN') : '0'}
                     </p>
                 </div>
             </div>
@@ -68,8 +68,8 @@ const ProductCard = ({ product, onShowQR, onEdit }) => {
                 </div>
                 <div className="flex justify-between">
                     <span className="text-slate-500">Warranty:</span>
-                    <span className={`font-medium ${product.warranty === 'Yes' ? 'text-green-600' : 'text-slate-400'}`}>
-                        {product.warranty === 'Yes' ? 'Yes' : 'No'}
+                    <span className={`font-medium ${product.warrantyAvailable === 'Yes' || product.warranty === 'Yes' ? 'text-green-600' : 'text-slate-400'}`}>
+                        {product.warrantyAvailable === 'Yes' || product.warranty === 'Yes' ? 'Yes' : 'No'}
                     </span>
                 </div>
                 <div className="flex justify-between">
@@ -78,7 +78,7 @@ const ProductCard = ({ product, onShowQR, onEdit }) => {
                 </div>
 
                 {/* Repair Highlight Section */}
-                {(product.lastRepair || product.lastCost) && (
+                {(product.lastRepairDate || product.lastRepair || product.repairCost || product.lastCost) && (
                     <div className="bg-slate-50 rounded-lg p-2 mt-2 space-y-1.5">
                         <div className="flex justify-between items-center border-b border-slate-200 pb-1 mb-1">
                             <span className="font-semibold text-slate-600">Repair History</span>
@@ -86,19 +86,19 @@ const ProductCard = ({ product, onShowQR, onEdit }) => {
                                 {product.repairCount || product.count || 0} Repairs
                             </span>
                         </div>
-                        {product.lastRepair && (
+                        {(product.lastRepairDate || product.lastRepair) && (
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Last Repair:</span>
-                                <span className="text-slate-700">{product.lastRepair || 'N/A'}</span>
+                                <span className="text-slate-700">{product.lastRepairDate || product.lastRepair || 'N/A'}</span>
                             </div>
                         )}
-                        {product.lastCost && (
+                        {(product.repairCost || product.lastCost) && (
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Last Cost:</span>
-                                <span className="text-red-600 font-medium">₹{product.lastCost}</span>
+                                <span className="text-red-600 font-medium">₹{product.repairCost || product.lastCost || '0'}</span>
                             </div>
                         )}
-                        {product.partChanged === 'Yes' && product.partNames && product.partNames.length > 0 && (
+                        {(product.partChanged === 'Yes' || product.partChg === 'Yes') && product.partNames && product.partNames.length > 0 && (
                             <div className="pt-1">
                                 <span className="text-slate-500 block mb-1">Parts Changed:</span>
                                 <div className="flex flex-wrap gap-1">
@@ -132,12 +132,124 @@ const AllProducts = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [debugInfo, setDebugInfo] = useState('');
 
-    // Debug: Log product structure on load
+    // Define the exact column order as specified
+    const fixedColumnOrder = [
+        'serialNo', 'productName', 'category', 'type', 'brand', 'model', 'sku', 
+        'mfgDate', 'origin', 'status', 'assetDate', 'invoiceNo', 'cost', 
+        'quantity', 'supplier', 'payment', 'location', 'department', 
+        'assignedTo', 'responsible', 'warranty', 'amc', 'maintenance', 
+        'priority', 'lastRepair', 'lastCost', 'partChanged', 'part1', 
+        'part2', 'part3', 'part4', 'part5', 'count', 'totalCost', 
+        'assetValue', 'depMethod', 'createdBy', 'id', 'supplierPhone', 
+        'supplierEmail', 'usageType', 'storageLoc', 'warrantyProvider', 
+        'warrantyStart', 'warrantyEnd', 'amcProvider', 'amcStart', 
+        'amcEnd', 'serviceContact', 'maintenanceType', 'frequency', 
+        'nextService', 'technician', 'maintenanceNotes', 'depRate', 
+        'assetLife', 'residualValue', 'internalNotes', 'usageRemarks', 
+        'condition', 'updatedBy', 'updatedDate'
+    ];
+
+    // Column configurations with labels and widths
+    const columnConfigs = {
+        'serialNo': { label: 'Serial No', width: '120px' },
+        'productName': { label: 'Product Name', width: '200px' },
+        'category': { label: 'Category', width: '120px' },
+        'type': { label: 'Type', width: '100px' },
+        'brand': { label: 'Brand', width: '120px' },
+        'model': { label: 'Model', width: '120px' },
+        'sku': { label: 'SKU', width: '100px' },
+        'mfgDate': { label: 'Mfg Date', width: '100px' },
+        'origin': { label: 'Origin', width: '100px' },
+        'status': { label: 'Status', width: '100px' },
+        'assetDate': { label: 'Asset Date', width: '120px' },
+        'invoiceNo': { label: 'Invoice No', width: '120px' },
+        'cost': { label: 'Cost', width: '100px' },
+        'quantity': { label: 'Qty', width: '80px' },
+        'supplier': { label: 'Supplier', width: '150px' },
+        'payment': { label: 'Payment', width: '100px' },
+        'location': { label: 'Location', width: '150px' },
+        'department': { label: 'Department', width: '120px' },
+        'assignedTo': { label: 'Assigned To', width: '150px' },
+        'responsible': { label: 'Responsible', width: '150px' },
+        'warranty': { label: 'Warranty', width: '100px' },
+        'amc': { label: 'AMC', width: '100px' },
+        'maintenance': { label: 'Maintenance', width: '120px' },
+        'priority': { label: 'Priority', width: '100px' },
+        'lastRepair': { label: 'Last Repair', width: '100px' },
+        'lastCost': { label: 'Last Cost', width: '100px' },
+        'partChanged': { label: 'Part Chg?', width: '80px' },
+        'part1': { label: 'Part 1', width: '120px' },
+        'part2': { label: 'Part 2', width: '120px' },
+        'part3': { label: 'Part 3', width: '120px' },
+        'part4': { label: 'Part 4', width: '120px' },
+        'part5': { label: 'Part 5', width: '120px' },
+        'count': { label: 'Count', width: '80px' },
+        'totalCost': { label: 'Total Cost', width: '120px' },
+        'assetValue': { label: 'Asset Value', width: '120px' },
+        'depMethod': { label: 'Dep. Method', width: '120px' },
+        'createdBy': { label: 'Created By', width: '150px' },
+        'id': { label: 'ID', width: '80px' },
+        'supplierPhone': { label: 'Supplier Phone', width: '120px' },
+        'supplierEmail': { label: 'Supplier Email', width: '150px' },
+        'usageType': { label: 'Usage Type', width: '100px' },
+        'storageLoc': { label: 'Storage Location', width: '150px' },
+        'warrantyProvider': { label: 'Warranty Provider', width: '150px' },
+        'warrantyStart': { label: 'Warranty Start', width: '120px' },
+        'warrantyEnd': { label: 'Warranty End', width: '120px' },
+        'amcProvider': { label: 'AMC Provider', width: '150px' },
+        'amcStart': { label: 'AMC Start', width: '120px' },
+        'amcEnd': { label: 'AMC End', width: '120px' },
+        'serviceContact': { label: 'Service Contact', width: '150px' },
+        'maintenanceType': { label: 'Maintenance Type', width: '120px' },
+        'frequency': { label: 'Frequency', width: '100px' },
+        'nextService': { label: 'Next Service', width: '120px' },
+        'technician': { label: 'Technician', width: '150px' },
+        'maintenanceNotes': { label: 'Maintenance Notes', width: '200px' },
+        'depRate': { label: 'Dep. Rate', width: '100px' },
+        'assetLife': { label: 'Asset Life', width: '100px' },
+        'residualValue': { label: 'Residual Value', width: '100px' },
+        'internalNotes': { label: 'Internal Notes', width: '200px' },
+        'usageRemarks': { label: 'Usage Remarks', width: '200px' },
+        'condition': { label: 'Condition', width: '100px' },
+        'updatedBy': { label: 'Updated By', width: '150px' },
+        'updatedDate': { label: 'Updated Date', width: '120px' }
+    };
+
+    // Create columns array based on fixed order
+    const [visibleColumns, setVisibleColumns] = useState([]);
+
+    // Debug: Log product structure on load and setup columns
     useEffect(() => {
         if (products.length > 0) {
-            console.log("First product structure:", products[0]);
-            console.log("Available keys:", Object.keys(products[0]));
-            setDebugInfo(`Loaded ${products.length} products. First product: ${products[0]?.productName || 'N/A'}`);
+            console.log("🔍 First product structure:", products[0]);
+            console.log("🔑 Available keys:", Object.keys(products[0]));
+            setDebugInfo(`Loaded ${products.length} products`);
+            
+            // Create columns based on fixed order, only include if the key exists in data
+            const columnsArray = fixedColumnOrder
+                .filter(key => {
+                    // Check if any product has this key with a value
+                    const hasKey = products.some(product => 
+                        product[key] !== undefined && product[key] !== null && product[key] !== ''
+                    );
+                    return hasKey;
+                })
+                .map(key => {
+                    const config = columnConfigs[key];
+                    return {
+                        key,
+                        label: config ? config.label : key.charAt(0).toUpperCase() + key.slice(1),
+                        width: config ? config.width : '120px'
+                    };
+                });
+            
+            console.log("📊 Visible columns configured:", columnsArray.length);
+            console.log("📋 Column list:", columnsArray.map(c => c.label).join(', '));
+            
+            setVisibleColumns(columnsArray);
+        } else {
+            console.log("ℹ️ No products available yet");
+            setVisibleColumns([]);
         }
     }, [products]);
 
@@ -147,12 +259,14 @@ const AllProducts = () => {
         const searchLower = searchTerm.toLowerCase();
         return (
             (product.productName && product.productName.toLowerCase().includes(searchLower)) ||
+            (product.serialNo && product.serialNo.toLowerCase().includes(searchLower)) ||
             (product.sn && product.sn.toLowerCase().includes(searchLower)) ||
             (product.category && product.category.toLowerCase().includes(searchLower)) ||
             (product.brand && product.brand.toLowerCase().includes(searchLower)) ||
             (product.model && product.model.toLowerCase().includes(searchLower)) ||
             (product.location && product.location.toLowerCase().includes(searchLower)) ||
-            (product.department && product.department.toLowerCase().includes(searchLower))
+            (product.department && product.department.toLowerCase().includes(searchLower)) ||
+            (product.assignedTo && product.assignedTo.toLowerCase().includes(searchLower))
         );
     });
 
@@ -169,6 +283,48 @@ const AllProducts = () => {
     const handleAddProduct = () => {
         setEditingProduct(null);
         setIsModalOpen(true);
+    };
+
+    // Function to format cell value based on column type
+    const formatCellValue = (value, columnKey) => {
+        if (value === undefined || value === null || value === '') {
+            return '-';
+        }
+        
+        // Handle arrays (like partNames)
+        if (Array.isArray(value)) {
+            return value.length > 0 ? value.join(', ') : '-';
+        }
+        
+        // Handle numeric values with ₹ symbol
+        if (['assetValue', 'cost', 'lastCost', 'totalCost', 'residualValue', 'depRate'].includes(columnKey)) {
+            if (typeof value === 'number') {
+                return `₹${value.toLocaleString('en-IN')}`;
+            } else if (!isNaN(parseFloat(value))) {
+                return `₹${parseFloat(value).toLocaleString('en-IN')}`;
+            }
+        }
+        
+        // Handle boolean-like values
+        if (['warranty', 'amc', 'partChanged', 'maintenance'].includes(columnKey)) {
+            return value === 'Yes' || value === true ? 'Yes' : value === 'No' || value === false ? 'No' : value;
+        }
+        
+        // Handle dates
+        if (['mfgDate', 'assetDate', 'warrantyStart', 'warrantyEnd', 'amcStart', 'amcEnd', 'nextService', 'lastRepair', 'updatedDate'].includes(columnKey)) {
+            if (value instanceof Date) {
+                return value.toLocaleDateString('en-GB');
+            } else if (typeof value === 'string' && value.trim() !== '') {
+                // Try to parse date
+                const date = new Date(value);
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleDateString('en-GB');
+                }
+            }
+        }
+        
+        // Return as string
+        return String(value);
     };
 
     // Loading State
@@ -199,47 +355,6 @@ const AllProducts = () => {
         );
     }
 
-    // All columns in exact order from your headers
-    const allColumns = [
-        { key: 'sn', label: 'Serial No', width: '120px' },
-        { key: 'productName', label: 'Product Name', width: '200px' },
-        { key: 'category', label: 'Category', width: '120px' },
-        { key: 'type', label: 'Type', width: '120px' },
-        { key: 'brand', label: 'Brand', width: '120px' },
-        { key: 'model', label: 'Model', width: '120px' },
-        { key: 'sku', label: 'SKU', width: '120px' },
-        { key: 'mfgDate', label: 'Mfg Date', width: '100px' },
-        { key: 'origin', label: 'Origin', width: '100px' },
-        { key: 'status', label: 'Status', width: '100px' },
-        { key: 'assetDate', label: 'Asset Date', width: '100px' },
-        { key: 'invoiceNo', label: 'Invoice No', width: '120px' },
-        { key: 'cost', label: 'Cost', width: '100px' },
-        { key: 'qty', label: 'Qty', width: '80px' },
-        { key: 'supplier', label: 'Supplier', width: '150px' },
-        { key: 'payment', label: 'Payment', width: '100px' },
-        { key: 'location', label: 'Location', width: '150px' },
-        { key: 'department', label: 'Department', width: '120px' },
-        { key: 'assignedTo', label: 'Assigned To', width: '150px' },
-        { key: 'responsible', label: 'Responsible', width: '150px' },
-        { key: 'warranty', label: 'Warranty', width: '100px' },
-        { key: 'amc', label: 'AMC', width: '100px' },
-        { key: 'maintenance', label: 'Maintenance', width: '120px' },
-        { key: 'priority', label: 'Priority', width: '100px' },
-        { key: 'lastRepair', label: 'Last Repair', width: '100px' },
-        { key: 'lastCost', label: 'Last Cost', width: '100px' },
-        { key: 'partChanged', label: 'Part Chg?', width: '80px' },
-        { key: 'part1', label: 'Part 1', width: '120px' },
-        { key: 'part2', label: 'Part 2', width: '120px' },
-        { key: 'part3', label: 'Part 3', width: '120px' },
-        { key: 'part4', label: 'Part 4', width: '120px' },
-        { key: 'part5', label: 'Part 5', width: '120px' },
-        { key: 'count', label: 'Count', width: '80px' },
-        { key: 'totalCost', label: 'Total Cost', width: '100px' },
-        { key: 'assetValue', label: 'Asset Value', width: '100px' },
-        { key: 'depMethod', label: 'Dep. Method', width: '120px' },
-        { key: 'createdBy', label: 'Created By', width: '150px' },
-    ];
-
     return (
         <div className="flex-1 w-full min-h-0 flex flex-col gap-4 p-4 lg:p-6 overflow-hidden">
             {/* Top Toolbar */}
@@ -250,10 +365,10 @@ const AllProducts = () => {
                         All Products <span className="text-sm text-slate-500 font-normal">({products.length} items)</span>
                     </h1>
 
-                    {/* Debug info - temporary (remove in production) */}
+                    {/* Debug info */}
                     {debugInfo && (
                         <div className="text-xs text-slate-500 bg-slate-50 px-2 py-1 rounded hidden lg:block">
-                            {debugInfo}
+                            {debugInfo} | Columns: {visibleColumns.length}
                         </div>
                     )}
 
@@ -310,7 +425,7 @@ const AllProducts = () => {
                 {filteredProducts.length > 0 ? (
                     filteredProducts.map((product, index) => (
                         <ProductCard 
-                            key={product.id || index} 
+                            key={product.id || product.serialNo || index} 
                             product={product} 
                             onShowQR={handleShowQR} 
                             onEdit={handleEditProduct} 
@@ -323,20 +438,20 @@ const AllProducts = () => {
                 )}
             </div>
 
-            {/* Desktop Table View - All Columns */}
-            <div className="hidden md:flex flex-1 min-h-0 flex-col bg-white rounded-t-xl shadow-sm border-x border-t border-slate-100 border-b overflow-hidden">
+            {/* Desktop Table View - Fixed Column Order */}
+            <div className="hidden md:flex flex-1 min-h-0 flex-col bg-white rounded-t-xl shadow-sm border-x border-t border-slate-100 overflow-hidden">
                 <div className="flex-1 overflow-auto w-full relative custom-scrollbar">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
+                    <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-100 sticky top-0 z-20 shadow-sm">
                             <tr>
                                 <th className="px-3 py-3 sticky left-0 top-0 z-30 bg-slate-50 drop-shadow-sm w-20">
                                     Actions
                                 </th>
-                                {allColumns.map((column) => (
+                                {visibleColumns.map((column) => (
                                     <th 
                                         key={column.key} 
-                                        className="px-3 py-3 border-r border-slate-100"
-                                        style={{ width: column.width }}
+                                        className="px-3 py-3 border-r border-slate-100 whitespace-nowrap"
+                                        style={{ minWidth: column.width }}
                                     >
                                         {column.label}
                                     </th>
@@ -346,9 +461,9 @@ const AllProducts = () => {
                         <tbody className="divide-y divide-slate-100">
                             {filteredProducts.length > 0 ? (
                                 filteredProducts.map((product, index) => (
-                                    <tr key={product.id || index} className="hover:bg-slate-50 transition-colors">
+                                    <tr key={product.id || product.serialNo || index} className="hover:bg-slate-50 transition-colors">
                                         {/* Actions */}
-                                        <td className="px-3 py-3 sticky left-0 bg-white">
+                                        <td className="px-3 py-3 sticky left-0 bg-white z-10">
                                             <div className="flex items-center gap-1">
                                                 <button
                                                     onClick={() => handleEditProduct(product)}
@@ -367,10 +482,10 @@ const AllProducts = () => {
                                             </div>
                                         </td>
                                         
-                                        {/* All Columns Data */}
-                                        {allColumns.map((column) => {
+                                        {/* All Columns Data in Fixed Order */}
+                                        {visibleColumns.map((column) => {
                                             const value = product[column.key];
-                                            const displayValue = value === undefined || value === null || value === '' ? '-' : value;
+                                            const displayValue = formatCellValue(value, column.key);
                                             
                                             return (
                                                 <td 
@@ -378,23 +493,25 @@ const AllProducts = () => {
                                                     className="px-3 py-3 text-slate-700 border-r border-slate-50"
                                                 >
                                                     {column.key === 'status' ? (
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'Active' ? 'bg-green-100 text-green-800' : displayValue === 'Inactive' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-800'}`}>
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'Active' ? 'bg-green-100 text-green-800' : displayValue === 'Inactive' ? 'bg-red-100 text-red-800' : displayValue === 'Under Maintenance' ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-100 text-slate-800'}`}>
                                                             {displayValue}
                                                         </span>
                                                     ) : column.key === 'priority' ? (
-                                                        <span className={`px-2 py-0.5 rounded-full text-xs ${displayValue === 'High' ? 'bg-red-100 text-red-800' : displayValue === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'High' || displayValue === 'Critical' ? 'bg-red-100 text-red-800' : displayValue === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
                                                             {displayValue}
                                                         </span>
-                                                    ) : ['cost', 'lastCost', 'totalCost', 'assetValue'].includes(column.key) ? (
-                                                        displayValue !== '-' ? `₹${typeof displayValue === 'number' ? displayValue.toLocaleString('en-IN') : displayValue}` : '-'
-                                                    ) : ['warranty', 'amc', 'partChanged'].includes(column.key) ? (
-                                                        <span className={`font-medium ${displayValue === 'Yes' ? 'text-green-600' : 'text-slate-600'}`}>
+                                                    ) : column.key === 'condition' ? (
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'Excellent' ? 'bg-green-100 text-green-800' : displayValue === 'Good' ? 'bg-blue-100 text-blue-800' : displayValue === 'Fair' ? 'bg-yellow-100 text-yellow-800' : displayValue === 'Poor' || displayValue === 'Needs Repair' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-800'}`}>
                                                             {displayValue}
                                                         </span>
-                                                    ) : column.key === 'qty' || column.key === 'count' ? (
-                                                        <span className="font-medium">{displayValue}</span>
+                                                    ) : ['warranty', 'amc', 'partChanged', 'maintenance'].includes(column.key) ? (
+                                                        <span className={`font-medium ${displayValue === 'Yes' ? 'text-green-600' : displayValue === 'No' ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                            {displayValue}
+                                                        </span>
                                                     ) : (
-                                                        <span className="truncate max-w-xs block">{displayValue}</span>
+                                                        <span className="truncate max-w-xs block" title={displayValue}>
+                                                            {displayValue}
+                                                        </span>
                                                     )}
                                                 </td>
                                             );
@@ -403,8 +520,8 @@ const AllProducts = () => {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={allColumns.length + 1} className="px-4 py-12 text-center text-slate-500">
-                                        {searchTerm ? 'No products found for your search.' : 'No products available.'}
+                                    <td colSpan={visibleColumns.length + 1} className="px-4 py-12 text-center text-slate-500">
+                                        {searchTerm ? 'No products found for your search.' : 'No products available. Click "Add Product" to get started.'}
                                     </td>
                                 </tr>
                             )}
@@ -413,17 +530,36 @@ const AllProducts = () => {
                 </div>
             </div>
 
+            {/* Footer Info */}
+            <div className="hidden md:flex items-center justify-between px-4 py-2 bg-slate-50 rounded-b-xl border border-slate-100">
+                <div className="text-xs text-slate-500">
+                    Showing {filteredProducts.length} of {products.length} products
+                    {filteredProducts.length > 0 && ` | ${visibleColumns.length} columns displayed`}
+                </div>
+                <div className="text-xs text-slate-500">
+                    {products.length > 0 && (
+                        <>Total fields in dataset: {Object.keys(products[0]).length}</>
+                    )}
+                </div>
+            </div>
+
             {/* Modals */}
             <AddProductModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setEditingProduct(null);
+                }}
                 product={editingProduct}
                 onRefresh={refreshProducts}
             />
 
             <QRCodeModal
                 isOpen={isQRModalOpen}
-                onClose={() => setIsQRModalOpen(false)}
+                onClose={() => {
+                    setIsQRModalOpen(false);
+                    setSelectedProduct(null);
+                }}
                 product={selectedProduct}
             />
 
@@ -437,5 +573,3 @@ const AllProducts = () => {
 };
 
 export default AllProducts;
-
-

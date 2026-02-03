@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Plus, Trash2, Loader, Save } from 'lucide-react';
+import { X, Upload, Plus, Trash2, Loader, Save, Camera } from 'lucide-react';
 import { useProduct } from '../context/ProductContext';
 
-// Reusable InputField component
+// Reusable InputField component (same as before)
 const InputField = ({ label, name, type = "text", value, onChange, placeholder, options, required = false, disabled = false }) => (
     <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-slate-700">
@@ -47,7 +47,7 @@ const InputField = ({ label, name, type = "text", value, onChange, placeholder, 
     </div>
 );
 
-// Section Header component
+// Section Header component (same as before)
 const SectionHeader = ({ title, subtitle = "" }) => (
     <div className="border-b border-light-blue-100 pb-2 mb-4 mt-2">
         <h3 className="text-lg font-bold text-light-blue-800">{title}</h3>
@@ -55,7 +55,7 @@ const SectionHeader = ({ title, subtitle = "" }) => (
     </div>
 );
 
-// Dynamic Spec Row component
+// Dynamic Spec Row component (same as before)
 const SpecRow = ({ spec, index, onChange, onRemove }) => (
     <div className="flex gap-4 items-end">
         <div className="flex-1">
@@ -84,7 +84,7 @@ const SpecRow = ({ spec, index, onChange, onRemove }) => (
     </div>
 );
 
-// Part Name Row component
+// Part Name Row component (same as before)
 const PartNameRow = ({ part, index, onChange, onRemove }) => (
     <div className="flex gap-2 items-center">
         <input
@@ -105,10 +105,12 @@ const PartNameRow = ({ part, index, onChange, onRemove }) => (
 );
 
 const AddProductModal = ({ isOpen, onClose, product = null }) => {
-    const { addProduct, updateProduct } = useProduct();
+    const { addProduct, updateProduct, refreshProducts } = useProduct();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState(null);
     const [submitSuccess, setSubmitSuccess] = useState(false);
+    const [uploadedImages, setUploadedImages] = useState([]);
+    const [imageUploading, setImageUploading] = useState(false);
 
     // Initial form state
     const initialFormData = {
@@ -118,7 +120,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         type: 'Asset',
         brand: '',
         model: '',
-        serialNo: '',
+        serialNo: '', // Will be auto-generated
         sku: '',
         mfgDate: '',
         origin: 'India',
@@ -153,7 +155,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         amcEnd: '',
         serviceContact: '',
         
-        // Section 5: Maintenance
+        // Section 5: Maintenance (Goes to Product_Maintenance sheet)
         maintenanceRequired: 'No',
         maintenanceType: 'Preventive',
         frequency: 'Monthly',
@@ -162,7 +164,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         technician: '',
         maintenanceNotes: '',
         
-        // Section 7: Technical Specifications
+        // Section 7: Technical Specifications (Goes to Product_Specs sheet)
         specs: [],
         
         // Section 8: Financial & Depreciation
@@ -176,13 +178,15 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         usageRemarks: '',
         condition: 'Good',
         
-        // Section 10: Repair Details
+        // Section 10: Repair Details (Goes to Product_Repairs sheet)
         lastRepairDate: '',
         repairCost: '0',
         partChanged: 'No',
         partNames: [],
         repairCount: '0',
         totalRepairCost: '0',
+        repairRemarks: '',
+        repairTechnician: '',
     };
 
     const [formData, setFormData] = useState(initialFormData);
@@ -191,6 +195,8 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         if (isOpen) {
             setSubmitError(null);
             setSubmitSuccess(false);
+            setUploadedImages([]);
+            
             if (product) {
                 // Edit Mode: Populate form with existing product data
                 setFormData({
@@ -212,9 +218,53 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
             } else {
                 // Add Mode: Reset to initial state
                 setFormData(initialFormData);
+                // Auto-generate serial number for new product
+                generateSerialNumber();
             }
         }
     }, [isOpen, product]);
+
+    // Format date to dd/mm/yy hh:mm:ss
+    const formatTimestamp = (date = new Date()) => {
+        const d = new Date(date);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = String(d.getFullYear()).slice(-2);
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const seconds = String(d.getSeconds()).padStart(2, '0');
+        
+        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+    };
+
+    // Auto-generate serial number
+    const generateSerialNumber = async () => {
+        try {
+            const response = await fetch('https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec?action=getNextSN');
+            const data = await response.json();
+            
+            if (data.success && data.nextSN) {
+                // Format as SN-0001, SN-0002, etc.
+                const snNumber = data.nextSN.toString().padStart(4, '0');
+                setFormData(prev => ({ ...prev, serialNo: `SN-${snNumber}` }));
+            } else {
+                // Fallback: get from local storage or generate
+                const lastSN = localStorage.getItem('lastSN') || '0';
+                const nextSN = parseInt(lastSN) + 1;
+                const snNumber = nextSN.toString().padStart(4, '0');
+                localStorage.setItem('lastSN', nextSN.toString());
+                setFormData(prev => ({ ...prev, serialNo: `SN-${snNumber}` }));
+            }
+        } catch (error) {
+            console.error('Error generating serial number:', error);
+            // Client-side fallback
+            const lastSN = localStorage.getItem('lastSN') || '0';
+            const nextSN = parseInt(lastSN) + 1;
+            const snNumber = nextSN.toString().padStart(4, '0');
+            localStorage.setItem('lastSN', nextSN.toString());
+            setFormData(prev => ({ ...prev, serialNo: `SN-${snNumber}` }));
+        }
+    };
 
     // Handle form field changes
     const handleChange = (e) => {
@@ -222,7 +272,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // Handle spec changes
+    // Handle spec changes (same as before)
     const handleSpecChange = (index, field, value) => {
         const newSpecs = [...formData.specs];
         if (!newSpecs[index]) newSpecs[index] = { name: '', value: '' };
@@ -230,7 +280,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         setFormData(prev => ({ ...prev, specs: newSpecs }));
     };
 
-    // Add new spec
+    // Add new spec (same as before)
     const addSpec = () => {
         setFormData(prev => ({ 
             ...prev, 
@@ -238,20 +288,20 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         }));
     };
 
-    // Remove spec
+    // Remove spec (same as before)
     const removeSpec = (index) => {
         const newSpecs = formData.specs.filter((_, i) => i !== index);
         setFormData(prev => ({ ...prev, specs: newSpecs }));
     };
 
-    // Handle part name changes
+    // Handle part name changes (same as before)
     const handlePartNameChange = (index, value) => {
         const newParts = [...formData.partNames];
         newParts[index] = value;
         setFormData(prev => ({ ...prev, partNames: newParts }));
     };
 
-    // Add new part name
+    // Add new part name (same as before)
     const addPartName = () => {
         if (formData.partNames.length < 5) {
             setFormData(prev => ({ 
@@ -261,10 +311,60 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         }
     };
 
-    // Remove part name
+    // Remove part name (same as before)
     const removePartName = (index) => {
         const newParts = formData.partNames.filter((_, i) => i !== index);
         setFormData(prev => ({ ...prev, partNames: newParts }));
+    };
+
+    // Handle image upload to Google Drive
+    const handleImageUpload = async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        setImageUploading(true);
+        try {
+            for (const file of files) {
+                if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                    setSubmitError(`File ${file.name} is too large. Max size is 10MB.`);
+                    continue;
+                }
+
+                // Create FormData for file upload
+                const formData = new FormData();
+                formData.append('action', 'uploadFile');
+                formData.append('file', file);
+                formData.append('folderId', '1nJIhEL_6BTLuZ3mu3XLPJOES-95ZlFwf');
+                
+                const response = await fetch('https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.fileUrl) {
+                    setUploadedImages(prev => [...prev, {
+                        name: file.name,
+                        url: data.fileUrl,
+                        size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
+                        driveId: data.fileId
+                    }]);
+                } else {
+                    setSubmitError(`Failed to upload ${file.name}: ${data.error || 'Unknown error'}`);
+                }
+            }
+        } catch (error) {
+            console.error('Error uploading images:', error);
+            setSubmitError('Failed to upload images. Please try again.');
+        } finally {
+            setImageUploading(false);
+        }
+    };
+
+    // Remove uploaded image
+    const removeImage = (index) => {
+        setUploadedImages(prev => prev.filter((_, i) => i !== index));
     };
 
     // Handle form submission
@@ -284,33 +384,238 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                 throw new Error('Serial Number is required');
             }
 
-            // Prepare data for submission
-            const submissionData = {
-                ...formData,
-                // Convert numeric strings to numbers
-                assetValue: parseFloat(formData.assetValue) || 0,
-                quantity: parseInt(formData.quantity) || 1,
-                repairCost: parseFloat(formData.repairCost) || 0,
-                repairCount: parseInt(formData.repairCount) || 0,
-                totalRepairCost: parseFloat(formData.totalRepairCost) || 0,
-                depRate: parseFloat(formData.depRate) || 10,
-                assetLife: parseInt(formData.assetLife) || 5,
-                residualValue: parseFloat(formData.residualValue) || 0,
-            };
-
+            // Get formatted timestamp for all submissions
+            const currentTimestamp = formatTimestamp();
+            
             if (product) {
-                // Update existing product
-                await updateProduct(product.id, submissionData);
+                // EDIT MODE - Update existing product
+                
+                // 1. Update main product information in Products sheet
+                const mainProductData = {
+                    ...formData,
+                    // Convert numeric strings to numbers
+                    assetValue: parseFloat(formData.assetValue) || 0,
+                    quantity: parseInt(formData.quantity) || 1,
+                    repairCost: parseFloat(formData.repairCost) || 0,
+                    repairCount: parseInt(formData.repairCount) || 0,
+                    totalRepairCost: parseFloat(formData.totalRepairCost) || 0,
+                    depRate: parseFloat(formData.depRate) || 10,
+                    assetLife: parseInt(formData.assetLife) || 5,
+                    residualValue: parseFloat(formData.residualValue) || 0,
+                    updatedBy: 'admin',
+                    updatedDate: currentTimestamp, // Formatted timestamp
+                    // Add image URL if uploaded
+                    image_url: uploadedImages.length > 0 ? uploadedImages[0].url : product.image_url || '',
+                    tags: formData.category
+                };
+                
+                // 2. If there are repair details, add to Product_Repairs sheet
+                if (formData.lastRepairDate && formData.repairCost && formData.repairCost !== '0') {
+                    const repairData = {
+                        'Product SN': formData.serialNo,
+                        'Repair Date': formData.lastRepairDate,
+                        'Repair Cost': parseFloat(formData.repairCost) || 0,
+                        'Part Changed': formData.partChanged,
+                        'Part 1': formData.partNames[0] || '',
+                        'Part 2': formData.partNames[1] || '',
+                        'Part 3': formData.partNames[2] || '',
+                        'Part 4': formData.partNames[3] || '',
+                        'Part 5': formData.partNames[4] || '',
+                        'Technician': formData.repairTechnician || '',
+                        'Remarks': formData.repairRemarks || '',
+                        'Created Date': currentTimestamp // Formatted timestamp
+                    };
+                    
+                    // Submit to Product_Repairs sheet
+                    await submitToSheet('Product_Repairs', repairData);
+                }
+                
+                // 3. If there are maintenance details, add to Product_Maintenance sheet
+                if (formData.maintenanceRequired === 'Yes') {
+                    const maintenanceData = {
+                        'Product SN': formData.serialNo,
+                        'Maintenance Required': formData.maintenanceRequired,
+                        'Maintenance Type': formData.maintenanceType,
+                        'Frequency': formData.frequency,
+                        'Next Service Date': formData.nextService,
+                        'Priority': formData.priority,
+                        'Technician': formData.technician,
+                        'Notes': formData.maintenanceNotes,
+                        'Created Date': currentTimestamp // Formatted timestamp
+                    };
+                    
+                    // Submit to Product_Maintenance sheet
+                    await submitToSheet('Product_Maintenance', maintenanceData);
+                }
+                
+                // 4. If there are specs, add to Product_Specs sheet
+                if (formData.specs.length > 0) {
+                    for (const spec of formData.specs) {
+                        if (spec.name && spec.value) {
+                            const specData = {
+                                'Product SN': formData.serialNo,
+                                'Spec Name': spec.name,
+                                'Spec Value': spec.value,
+                                'Created Date': currentTimestamp // Formatted timestamp
+                            };
+                            
+                            // Submit to Product_Specs sheet
+                            await submitToSheet('Product_Specs', specData);
+                        }
+                    }
+                }
+                
+                // 5. Update main product in Products sheet
+                await updateProduct(product.id, mainProductData);
+                
                 setSubmitSuccess(true);
                 setTimeout(() => {
                     onClose();
+                    refreshProducts();
                 }, 1500);
+                
             } else {
-                // Add new product
-                await addProduct(submissionData);
+                // ADD MODE - Create new product
+                
+                // 1. Prepare main product data for Products sheet
+                const mainProductData = {
+                    // Map form fields to sheet columns
+                    'Timestamp': currentTimestamp, // Formatted timestamp
+                    'Serial No': formData.serialNo,
+                    'Product Name': formData.productName,
+                    'Category': formData.category,
+                    'Type': formData.type,
+                    'Brand': formData.brand,
+                    'Model': formData.model,
+                    'SKU': formData.sku,
+                    'Mfg Date': formData.mfgDate,
+                    'Origin': formData.origin,
+                    'Status': formData.status,
+                    'Asset Date': formData.assetDate,
+                    'Invoice No': formData.invoiceNo,
+                    'Cost': parseFloat(formData.assetValue) || 0,
+                    'Qty': parseInt(formData.quantity) || 1,
+                    'Supplier': formData.supplierName,
+                    'Payment': formData.paymentMode,
+                    'Location': formData.location,
+                    'Department': formData.department,
+                    'Assigned To': formData.assignedTo,
+                    'Responsible': formData.responsiblePerson,
+                    'Warranty': formData.warrantyAvailable,
+                    'AMC': formData.amc,
+                    'Maintenance': formData.maintenanceRequired,
+                    'Priority': formData.priority,
+                    'Last Repair': formData.lastRepairDate || '',
+                    'Last Cost': parseFloat(formData.repairCost) || 0,
+                    'Part Chg?': formData.partChanged,
+                    'Part 1': formData.partNames[0] || '',
+                    'Part 2': formData.partNames[1] || '',
+                    'Part 3': formData.partNames[2] || '',
+                    'Part 4': formData.partNames[3] || '',
+                    'Part 5': formData.partNames[4] || '',
+                    'Count': parseInt(formData.repairCount) || 0,
+                    'Total Cost': parseFloat(formData.totalRepairCost) || 0,
+                    'Asset Value': parseFloat(formData.assetValue) || 0,
+                    'Dep. Method': formData.depMethod,
+                    'Created By': 'admin',
+                    // New columns
+                    'id': '', // Will be auto-generated by sheet
+                    'supplierPhone': formData.supplierPhone,
+                    'supplierEmail': formData.supplierEmail,
+                    'usageType': formData.usageType,
+                    'storageLoc': formData.storageLoc,
+                    'warrantyProvider': formData.warrantyProvider,
+                    'warrantyStart': formData.warrantyStart,
+                    'warrantyEnd': formData.warrantyEnd,
+                    'amcProvider': formData.amcProvider,
+                    'amcStart': formData.amcStart,
+                    'amcEnd': formData.amcEnd,
+                    'serviceContact': formData.serviceContact,
+                    'maintenanceType': formData.maintenanceType,
+                    'frequency': formData.frequency,
+                    'nextService': formData.nextService,
+                    'technician': formData.technician,
+                    'maintenanceNotes': formData.maintenanceNotes,
+                    'depRate': parseFloat(formData.depRate) || 10,
+                    'assetLife': parseInt(formData.assetLife) || 5,
+                    'residualValue': parseFloat(formData.residualValue) || 0,
+                    'internalNotes': formData.internalNotes,
+                    'usageRemarks': formData.usageRemarks,
+                    'condition': formData.condition,
+                    'updatedBy': '',
+                    'updatedDate': '',
+                    'qr_code_url': '',
+                    'image_url': uploadedImages.length > 0 ? uploadedImages[0].url : '',
+                    'tags': formData.category,
+                    // Add edition column
+                    'edition': '1', // Default edition
+                    'updatedBy': 'admin',
+                    'updatedDate': currentTimestamp // Formatted timestamp
+                };
+                
+                // 2. Submit main product to Products sheet
+                await submitToSheet('Products', mainProductData);
+                
+                // 3. If there are repair details, add to Product_Repairs sheet
+                if (formData.lastRepairDate && formData.repairCost && formData.repairCost !== '0') {
+                    const repairData = {
+                        'Product SN': formData.serialNo,
+                        'Repair Date': formData.lastRepairDate,
+                        'Repair Cost': parseFloat(formData.repairCost) || 0,
+                        'Part Changed': formData.partChanged,
+                        'Part 1': formData.partNames[0] || '',
+                        'Part 2': formData.partNames[1] || '',
+                        'Part 3': formData.partNames[2] || '',
+                        'Part 4': formData.partNames[3] || '',
+                        'Part 5': formData.partNames[4] || '',
+                        'Technician': formData.repairTechnician || '',
+                        'Remarks': formData.repairRemarks || '',
+                        'Created Date': currentTimestamp // Formatted timestamp
+                    };
+                    
+                    // Submit to Product_Repairs sheet
+                    await submitToSheet('Product_Repairs', repairData);
+                }
+                
+                // 4. If there are maintenance details, add to Product_Maintenance sheet
+                if (formData.maintenanceRequired === 'Yes') {
+                    const maintenanceData = {
+                        'Product SN': formData.serialNo,
+                        'Maintenance Required': formData.maintenanceRequired,
+                        'Maintenance Type': formData.maintenanceType,
+                        'Frequency': formData.frequency,
+                        'Next Service Date': formData.nextService,
+                        'Priority': formData.priority,
+                        'Technician': formData.technician,
+                        'Notes': formData.maintenanceNotes,
+                        'Created Date': currentTimestamp // Formatted timestamp
+                    };
+                    
+                    // Submit to Product_Maintenance sheet
+                    await submitToSheet('Product_Maintenance', maintenanceData);
+                }
+                
+                // 5. If there are specs, add to Product_Specs sheet
+                if (formData.specs.length > 0) {
+                    for (const spec of formData.specs) {
+                        if (spec.name && spec.value) {
+                            const specData = {
+                                'Product SN': formData.serialNo,
+                                'Spec Name': spec.name,
+                                'Spec Value': spec.value,
+                                'Created Date': currentTimestamp // Formatted timestamp
+                            };
+                            
+                            // Submit to Product_Specs sheet
+                            await submitToSheet('Product_Specs', specData);
+                        }
+                    }
+                }
+                
                 setSubmitSuccess(true);
                 setTimeout(() => {
                     onClose();
+                    refreshProducts();
                 }, 1500);
             }
         } catch (error) {
@@ -318,6 +623,34 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
             setSubmitError(error.message || 'Failed to save product. Please try again.');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // Helper function to submit data to specific sheet
+    const submitToSheet = async (sheetName, data) => {
+        try {
+            // Convert object to array in correct column order
+            const rowData = Object.values(data);
+            
+            const response = await fetch('https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec', {
+                method: 'POST',
+                body: new URLSearchParams({
+                    action: 'insert',
+                    sheetName: sheetName,
+                    rowData: JSON.stringify(rowData)
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(`Failed to save to ${sheetName}: ${result.error}`);
+            }
+            
+            return result;
+        } catch (error) {
+            console.error(`Error submitting to ${sheetName}:`, error);
+            throw error;
         }
     };
 
@@ -428,7 +761,8 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                                     value={formData.serialNo}
                                     onChange={handleChange}
                                     required
-                                    placeholder="Enter unique serial number"
+                                    disabled={!!product} // Disable editing of SN for existing products
+                                    placeholder="Auto-generated (e.g., SN-0001)"
                                 />
                                 <InputField 
                                     label="SKU / Product Code" 
@@ -679,7 +1013,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                         <section>
                             <SectionHeader 
                                 title="SECTION 5: Maintenance Configuration" 
-                                subtitle="Maintenance schedule and requirements"
+                                subtitle="Maintenance schedule and requirements - Will be saved in Product_Maintenance sheet"
                             />
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <InputField 
@@ -746,26 +1080,83 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                             </div>
                         </section>
 
-                        {/* SECTION 6: Documentation Upload */}
+                        {/* SECTION 6: Image Upload */}
                         <section>
                             <SectionHeader 
-                                title="SECTION 6: Documentation" 
-                                subtitle="Upload product documents (optional)"
+                                title="SECTION 6: Product Images" 
+                                subtitle="Upload product images (Optional)"
                             />
                             <div className="p-4 border border-dashed border-slate-300 rounded-lg bg-slate-50 text-center">
-                                <Upload className="mx-auto h-12 w-12 text-slate-400" />
-                                <p className="mt-2 text-sm text-slate-600">
-                                    Upload Product Images, User Manuals, Warranty Cards, Invoices, etc.
+                                <Camera className="mx-auto h-12 w-12 text-slate-400 mb-2" />
+                                <p className="text-sm text-slate-600 mb-3">
+                                    Upload Product Images to Google Drive (Max 5 images, 10MB each)
                                 </p>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Supported: PDF, JPG, PNG, DOC (Max 10MB each)
-                                </p>
-                                <button 
-                                    type="button"
-                                    className="mt-2 px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-                                >
-                                    Select Files
-                                </button>
+                                
+                                <div className="mb-3">
+                                    <input
+                                        type="file"
+                                        id="image-upload"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleImageUpload}
+                                        disabled={imageUploading}
+                                        className="hidden"
+                                    />
+                                    <label
+                                        htmlFor="image-upload"
+                                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer ${imageUploading ? 'bg-slate-300' : 'bg-white border border-slate-300 hover:bg-slate-50'} transition-colors`}
+                                    >
+                                        {imageUploading ? (
+                                            <>
+                                                <Loader className="animate-spin h-4 w-4" />
+                                                Uploading to Google Drive...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="h-4 w-4" />
+                                                Select Images
+                                            </>
+                                        )}
+                                    </label>
+                                    <p className="text-xs text-slate-500 mt-2">
+                                        Images will be uploaded to Google Drive folder: Product Images
+                                    </p>
+                                </div>
+                                
+                                {/* Uploaded Images Preview */}
+                                {uploadedImages.length > 0 && (
+                                    <div className="mt-4">
+                                        <p className="text-sm font-medium text-slate-700 mb-2">Uploaded Images:</p>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            {uploadedImages.map((image, index) => (
+                                                <div key={index} className="relative group">
+                                                    <img 
+                                                        src={image.url} 
+                                                        alt={image.name}
+                                                        className="w-full h-24 object-cover rounded-lg border border-slate-200"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeImage(index)}
+                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                    <p className="text-xs text-slate-500 truncate mt-1">{image.name}</p>
+                                                    <p className="text-xs text-slate-400">{image.size}</p>
+                                                    <a 
+                                                        href={image.url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="text-xs text-light-blue-600 hover:underline"
+                                                    >
+                                                        Google Drive Link
+                                                    </a>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </section>
 
@@ -773,7 +1164,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                         <section>
                             <SectionHeader 
                                 title="SECTION 7: Technical Specifications" 
-                                subtitle="Add technical details and specifications"
+                                subtitle="Add technical details and specifications - Will be saved in Product_Specs sheet"
                             />
                             <div className="space-y-3">
                                 {formData.specs.map((spec, index) => (
@@ -875,7 +1266,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                         <section>
                             <SectionHeader 
                                 title="SECTION 10: Repair History" 
-                                subtitle="Past repair and maintenance records"
+                                subtitle="Past repair and maintenance records - Will be saved in Product_Repairs sheet"
                             />
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <InputField 
@@ -892,6 +1283,21 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                                     value={formData.repairCost}
                                     onChange={handleChange}
                                     placeholder="Enter cost"
+                                />
+                                <InputField 
+                                    label="Repair Technician" 
+                                    name="repairTechnician" 
+                                    value={formData.repairTechnician}
+                                    onChange={handleChange}
+                                    placeholder="Technician name"
+                                />
+                                <InputField 
+                                    label="Repair Remarks" 
+                                    name="repairRemarks" 
+                                    type="textarea"
+                                    value={formData.repairRemarks}
+                                    onChange={handleChange}
+                                    placeholder="Repair details or notes"
                                 />
                                 <InputField 
                                     label="Repair Count" 
@@ -955,11 +1361,14 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                 <div className="p-6 border-t border-slate-100 bg-white rounded-b-xl flex justify-between items-center">
                     <div className="text-sm text-slate-500">
                         <span className="text-red-500">*</span> Required fields
-                        {product && (
-                            <span className="ml-4">
-                                Last updated: {product.updatedDate ? new Date(product.updatedDate).toLocaleDateString() : 'Never'}
-                            </span>
-                        )}
+                        <div className="mt-1 text-xs text-slate-400">
+                            Serial No: <span className="font-medium">{formData.serialNo}</span>
+                            {product && (
+                                <span className="ml-4">
+                                    Last updated: {product.updatedDate ? formatTimestamp(product.updatedDate) : 'Never'}
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <div className="flex gap-4">
                         <button
@@ -973,8 +1382,8 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                         <button
                             type="submit"
                             form="product-form"
-                            disabled={isSubmitting}
-                            className="px-6 py-2 bg-light-blue-600 hover:bg-light-blue-700 text-white rounded-lg font-medium shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 min-w-[140px] justify-center"
+                            disabled={isSubmitting || imageUploading}
+                            className="px-6 py-2 bg-gradient-to-r from-light-blue-600 to-cyan-600 hover:from-light-blue-700 hover:to-cyan-700 text-white rounded-lg font-medium shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 min-w-[140px] justify-center"
                         >
                             {isSubmitting ? (
                                 <>
