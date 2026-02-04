@@ -302,22 +302,7 @@ const Dashboard = () => {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => navigate('/products')}
-              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-4 py-2 rounded-xl flex items-center gap-2 transition-all duration-300 hover:scale-105"
-            >
-              <QrCode size={18} />
-              Quick Scan
-            </button>
-            <button 
-              onClick={() => navigate('/products/add')}
-              className="bg-white text-light-blue-600 hover:bg-light-blue-50 px-4 py-2 rounded-xl flex items-center gap-2 transition-all duration-300 hover:scale-105 font-medium shadow-lg"
-            >
-              <Package size={18} />
-              Add Product
-            </button>
-          </div>
+         
         </div>
       </div>
 

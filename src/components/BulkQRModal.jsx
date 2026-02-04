@@ -488,29 +488,7 @@ ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
 
                 {/* Footer */}
                 <div className="p-4 border-t border-slate-200 bg-white shrink-0">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div className="bg-gradient-to-r from-slate-50 to-slate-100 p-3 rounded-xl border border-slate-200">
-                            <div className="flex items-center gap-2 mb-1">
-                                <Package size={16} className="text-light-blue-600" />
-                                <p className="text-sm font-medium text-slate-700">Products Found</p>
-                            </div>
-                            <p className="text-2xl font-bold text-slate-900">{filteredProducts.length}</p>
-                        </div>
-                        <div className="bg-gradient-to-r from-light-blue-50 to-cyan-50 p-3 rounded-xl border border-light-blue-200">
-                            <div className="flex items-center gap-2 mb-1">
-                                <FileText size={16} className="text-light-blue-600" />
-                                <p className="text-sm font-medium text-slate-700">Selected for PDF</p>
-                            </div>
-                            <p className="text-2xl font-bold text-light-blue-700">{selectedProductObjects.length}</p>
-                        </div>
-                        <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-3 rounded-xl border border-emerald-200">
-                            <div className="flex items-center gap-2 mb-1">
-                                <User size={16} className="text-emerald-600" />
-                                <p className="text-sm font-medium text-slate-700">Ready to Print</p>
-                            </div>
-                            <p className="text-2xl font-bold text-emerald-700">{selectedProductObjects.length > 0 ? 'Yes' : 'No'}</p>
-                        </div>
-                    </div>
+                            
 
                     <button
                         onClick={generatePDF}

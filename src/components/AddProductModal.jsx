@@ -208,18 +208,49 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                     partNames: Array.isArray(product.partNames) ? product.partNames : 
                               (product.partNames ? JSON.parse(product.partNames) : []),
                     // Ensure date fields are formatted for input[type="date"]
-                    mfgDate: formatDateForInput(product.mfgDate),
-                    assetDate: formatDateForInput(product.assetDate),
-                    warrantyStart: formatDateForInput(product.warrantyStart),
-                    warrantyEnd: formatDateForInput(product.warrantyEnd),
-                    amcStart: formatDateForInput(product.amcStart),
-                    amcEnd: formatDateForInput(product.amcEnd),
-                    nextService: formatDateForInput(product.nextService),
-                    lastRepairDate: formatDateForInput(product.lastRepairDate),
+                    // ✅ FIXED FIELD MAPPING (matches your sheet headers)
+
+mfgDate: formatDateForInput(product["Mfg Date"] || product.mfgDate),
+
+assetDate: formatDateForInput(product["Asset Date"] || product.assetDate),
+
+supplierName:
+  product["Supplier"] ||
+  product.supplier ||
+  product.supplierName ||
+  "",
+
+responsiblePerson:
+  product["Responsible"] ||
+  product.responsible ||
+  product.responsiblePerson ||
+  "",
+
+warrantyStart: formatDateForInput(product["warrantyStart"] || product.warrantyStart),
+
+warrantyEnd: formatDateForInput(product["warrantyEnd"] || product.warrantyEnd),
+
+amcStart: formatDateForInput(product["amcStart"] || product.amcStart),
+
+amcEnd: formatDateForInput(product["amcEnd"] || product.amcEnd),
+
+nextService: formatDateForInput(product["nextService"] || product.nextService),
+
+lastRepairDate: formatDateForInput(product["Last Repair"] || product.lastRepairDate),
+
+repairCost: product["Last Cost"]?.toString() || product.repairCost || "0",
+
+repairTechnician: product["technician"] || product.repairTechnician || "",
+
+repairRemarks:
+  product["Repair Remarks"] ||
+  product["maintenanceNotes"] ||
+  product.repairRemarks ||
+  "",
                     // Ensure numeric fields are strings
                     assetValue: product.assetValue?.toString() || '',
                     quantity: product.quantity?.toString() || '1',
-                    repairCost: product.repairCost?.toString() || '0',
+                    repairCost: product["Last Cost"]?.toString() || product.repairCost || "0",
                     depRate: product.depRate?.toString() || '10',
                     assetLife: product.assetLife?.toString() || '5',
                     residualValue: product.residualValue?.toString() || '0',
@@ -247,34 +278,41 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
 
     // Helper function to format date for input[type="date"]
     const formatDateForInput = (dateString) => {
-        if (!dateString) return '';
-        
-        try {
-            // Handle different date formats
-            if (dateString.includes('/')) {
-                // Format: dd/mm/yyyy
-                const parts = dateString.split('/');
-                if (parts.length === 3) {
-                    const [day, month, year] = parts;
-                    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                }
-            } else if (dateString.includes('-')) {
-                // Format: yyyy-mm-dd
-                return dateString;
-            }
-            
-            // Try to parse as Date object
-            const date = new Date(dateString);
-            if (!isNaN(date.getTime())) {
-                return date.toISOString().split('T')[0];
-            }
-            
-            return '';
-        } catch (error) {
-            console.error('Error formatting date:', error);
-            return '';
+  if (!dateString) return "";
+
+  try {
+    // If already yyyy-mm-dd
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+
+    // Handle dd/mm/yyyy OR dd/mm/yy
+    if (dateString.includes("/")) {
+      const parts = dateString.split("/");
+      if (parts.length === 3) {
+        let [day, month, year] = parts;
+
+        // convert yy → yyyy
+        if (year.length === 2) {
+          year = "20" + year;
         }
-    };
+
+        return `${year}-${month.padStart(2,"0")}-${day.padStart(2,"0")}`;
+      }
+    }
+
+    // Fallback
+    const d = new Date(dateString);
+    if (!isNaN(d)) {
+      return d.toISOString().split("T")[0];
+    }
+
+    return "";
+  } catch (err) {
+    console.error("Date parse error:", err);
+    return "";
+  }
+};
 
     // Extract Drive ID from URL
     const extractDriveId = (url) => {
@@ -287,22 +325,23 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
     };
 
     // Format date to dd/mm/yyyy
-    const formatDateToDMY = (dateString) => {
-        if (!dateString) return '';
-        
-        try {
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return dateString;
-            
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            
-            return `${day}/${month}/${year}`;
-        } catch {
-            return dateString;
-        }
-    };
+  const formatDateToDMY = (dateString) => {
+  if (!dateString) return "";
+
+  try {
+    // dateString will be yyyy-mm-dd
+    const [year, month, day] = dateString.split("-");
+
+    // yy from yyyy
+    const shortYear = year.slice(-2);
+
+    return `${day}/${month}/${shortYear}`;
+  } catch (err) {
+    console.error("formatDateToDMY error:", err);
+    return "";
+  }
+};
+
 
     // Auto-generate serial number
     const generateSerialNumber = async () => {
@@ -384,66 +423,68 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         setFormData(prev => ({ ...prev, partNames: newParts }));
     };
 
-    // Handle image upload to Google Drive
-    const handleImageUpload = async (e) => {
-        const files = Array.from(e.target.files);
-        if (files.length === 0) return;
+   // ✅ REPLACE THIS ENTIRE FUNCTION (around line 465)
+const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
 
-        setImageFiles(files);
-        setImageUploading(true);
-        setSubmitError(null);
+    setImageFiles(files);
+    setImageUploading(true);
+    setSubmitError(null);
 
-        try {
-            for (const file of files) {
-                if (file.size > 10 * 1024 * 1024) {
-                    setSubmitError(`File ${file.name} is too large. Max size is 10MB.`);
-                    continue;
-                }
-
-                // Convert file to base64
-                const reader = new FileReader();
-                const base64Data = await new Promise((resolve, reject) => {
-                    reader.onload = () => {
-                        const base64String = reader.result.split(',')[1];
-                        resolve(base64String);
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-
-                // Upload to Google Apps Script
-                const formData = new FormData();
-                formData.append('action', 'uploadFile');
-                formData.append('base64Data', base64Data);
-                formData.append('fileName', file.name);
-                formData.append('mimeType', file.type);
-                formData.append('folderId', '1nJIhEL_6BTLuZ3mu3XLPJOES-95ZlFwf');
-                
-                const response = await fetch('https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success && data.fileUrl) {
-                    setUploadedImages(prev => [...prev, {
-                        name: file.name,
-                        url: data.fileUrl,
-                        size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
-                        driveId: extractDriveId(data.fileUrl)
-                    }]);
-                } else {
-                    setSubmitError(`Failed to upload ${file.name}: ${data.error || 'Unknown error'}`);
-                }
+    try {
+        for (const file of files) {
+            if (file.size > 10 * 1024 * 1024) {
+                setSubmitError(`File ${file.name} is too large. Max size is 10MB.`);
+                continue;
             }
-        } catch (error) {
-            console.error('Error uploading images:', error);
-            setSubmitError('Failed to upload images. Please try again.');
-        } finally {
-            setImageUploading(false);
+
+            // Convert file to base64
+            const reader = new FileReader();
+            const base64Data = await new Promise((resolve, reject) => {
+                reader.onload = () => {
+                    const base64String = reader.result.split(',')[1];
+                    resolve(base64String);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            // ✅ FIXED: Use URLSearchParams instead of FormData
+            const response = await fetch('https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    action: 'uploadFile',
+                    base64Data: base64Data,
+                    fileName: file.name,
+                    mimeType: file.type,
+                    folderId: '1nJIhEL_6BTLuZ3mu3XLPJOES-95ZlFwf'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.fileUrl) {
+                setUploadedImages(prev => [...prev, {
+                    name: file.name,
+                    url: data.fileUrl,
+                    size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
+                    driveId: extractDriveId(data.fileUrl)
+                }]);
+            } else {
+                setSubmitError(`Failed to upload ${file.name}: ${data.error || 'Unknown error'}`);
+            }
         }
-    };
+    } catch (error) {
+        console.error('Error uploading images:', error);
+        setSubmitError('Failed to upload images. Please try again.');
+    } finally {
+        setImageUploading(false);
+    }
+};
 
     // Remove uploaded image
     const removeImage = (index) => {

@@ -462,5 +462,5 @@ export const ProductProvider = ({ children }) => {
         }}>
             {children}
         </ProductContext.Provider>
-    );
+    )
 };

@@ -11,14 +11,19 @@ const Login = () => {
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (login(id, password)) {
-            navigate('/dashboard');
-        } else {
-            setError('Invalid ID or Password');
-        }
-    };
+   const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError("");
+
+  const success = await login(id, password);
+
+  if (success) {
+    navigate("/dashboard");
+  } else {
+    setError("Invalid ID or Password");
+  }
+};
+
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-sky-50 relative">
@@ -98,3 +103,5 @@ const Login = () => {
 };
 
 export default Login;
+
+
