@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Upload, Plus, Trash2, Loader, Save, Camera } from 'lucide-react';
 import { useProduct } from '../context/ProductContext';
 
-// Reusable InputField component (same as before)
+// Reusable InputField component
 const InputField = ({ label, name, type = "text", value, onChange, placeholder, options, required = false, disabled = false }) => (
     <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-slate-700">
@@ -18,7 +18,7 @@ const InputField = ({ label, name, type = "text", value, onChange, placeholder, 
                 required={required}
             >
                 <option value="">Select {label}</option>
-                {options.map(opt => (
+                {options?.map(opt => (
                     <option key={opt} value={opt}>{opt}</option>
                 ))}
             </select>
@@ -47,7 +47,7 @@ const InputField = ({ label, name, type = "text", value, onChange, placeholder, 
     </div>
 );
 
-// Section Header component (same as before)
+// Section Header component
 const SectionHeader = ({ title, subtitle = "" }) => (
     <div className="border-b border-light-blue-100 pb-2 mb-4 mt-2">
         <h3 className="text-lg font-bold text-light-blue-800">{title}</h3>
@@ -55,7 +55,7 @@ const SectionHeader = ({ title, subtitle = "" }) => (
     </div>
 );
 
-// Dynamic Spec Row component (same as before)
+// Dynamic Spec Row component
 const SpecRow = ({ spec, index, onChange, onRemove }) => (
     <div className="flex gap-4 items-end">
         <div className="flex-1">
@@ -84,7 +84,7 @@ const SpecRow = ({ spec, index, onChange, onRemove }) => (
     </div>
 );
 
-// Part Name Row component (same as before)
+// Part Name Row component
 const PartNameRow = ({ part, index, onChange, onRemove }) => (
     <div className="flex gap-2 items-center">
         <input
@@ -111,6 +111,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const [uploadedImages, setUploadedImages] = useState([]);
     const [imageUploading, setImageUploading] = useState(false);
+    const [imageFiles, setImageFiles] = useState([]);
 
     // Initial form state
     const initialFormData = {
@@ -120,7 +121,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         type: 'Asset',
         brand: '',
         model: '',
-        serialNo: '', // Will be auto-generated
+        serialNo: '',
         sku: '',
         mfgDate: '',
         origin: 'India',
@@ -183,8 +184,6 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         repairCost: '0',
         partChanged: 'No',
         partNames: [],
-        repairCount: '0',
-        totalRepairCost: '0',
         repairRemarks: '',
         repairTechnician: '',
     };
@@ -196,25 +195,47 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
             setSubmitError(null);
             setSubmitSuccess(false);
             setUploadedImages([]);
+            setImageFiles([]);
             
             if (product) {
                 // Edit Mode: Populate form with existing product data
-                setFormData({
+                const populatedData = {
                     ...initialFormData,
                     ...product,
                     // Ensure arrays are properly initialized
-                    specs: product.specs || [],
-                    partNames: product.partNames || [],
+                    specs: Array.isArray(product.specs) ? product.specs : 
+                           (product.specs ? JSON.parse(product.specs) : []),
+                    partNames: Array.isArray(product.partNames) ? product.partNames : 
+                              (product.partNames ? JSON.parse(product.partNames) : []),
+                    // Ensure date fields are formatted for input[type="date"]
+                    mfgDate: formatDateForInput(product.mfgDate),
+                    assetDate: formatDateForInput(product.assetDate),
+                    warrantyStart: formatDateForInput(product.warrantyStart),
+                    warrantyEnd: formatDateForInput(product.warrantyEnd),
+                    amcStart: formatDateForInput(product.amcStart),
+                    amcEnd: formatDateForInput(product.amcEnd),
+                    nextService: formatDateForInput(product.nextService),
+                    lastRepairDate: formatDateForInput(product.lastRepairDate),
                     // Ensure numeric fields are strings
                     assetValue: product.assetValue?.toString() || '',
                     quantity: product.quantity?.toString() || '1',
                     repairCost: product.repairCost?.toString() || '0',
-                    repairCount: product.repairCount?.toString() || '0',
-                    totalRepairCost: product.totalRepairCost?.toString() || '0',
                     depRate: product.depRate?.toString() || '10',
                     assetLife: product.assetLife?.toString() || '5',
                     residualValue: product.residualValue?.toString() || '0',
-                });
+                };
+                
+                setFormData(populatedData);
+                
+                // Load existing images if any
+                if (product.image_url) {
+                    setUploadedImages([{
+                        name: 'Product Image',
+                        url: product.image_url,
+                        size: 'N/A',
+                        driveId: extractDriveId(product.image_url)
+                    }]);
+                }
             } else {
                 // Add Mode: Reset to initial state
                 setFormData(initialFormData);
@@ -224,17 +245,63 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         }
     }, [isOpen, product]);
 
-    // Format date to dd/mm/yy hh:mm:ss
-    const formatTimestamp = (date = new Date()) => {
-        const d = new Date(date);
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = String(d.getFullYear()).slice(-2);
-        const hours = String(d.getHours()).padStart(2, '0');
-        const minutes = String(d.getMinutes()).padStart(2, '0');
-        const seconds = String(d.getSeconds()).padStart(2, '0');
+    // Helper function to format date for input[type="date"]
+    const formatDateForInput = (dateString) => {
+        if (!dateString) return '';
         
-        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+        try {
+            // Handle different date formats
+            if (dateString.includes('/')) {
+                // Format: dd/mm/yyyy
+                const parts = dateString.split('/');
+                if (parts.length === 3) {
+                    const [day, month, year] = parts;
+                    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                }
+            } else if (dateString.includes('-')) {
+                // Format: yyyy-mm-dd
+                return dateString;
+            }
+            
+            // Try to parse as Date object
+            const date = new Date(dateString);
+            if (!isNaN(date.getTime())) {
+                return date.toISOString().split('T')[0];
+            }
+            
+            return '';
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return '';
+        }
+    };
+
+    // Extract Drive ID from URL
+    const extractDriveId = (url) => {
+        try {
+            const match = url.match(/id=([^&]+)/);
+            return match ? match[1] : null;
+        } catch {
+            return null;
+        }
+    };
+
+    // Format date to dd/mm/yyyy
+    const formatDateToDMY = (dateString) => {
+        if (!dateString) return '';
+        
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString;
+            
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            
+            return `${day}/${month}/${year}`;
+        } catch {
+            return dateString;
+        }
     };
 
     // Auto-generate serial number
@@ -272,7 +339,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    // Handle spec changes (same as before)
+    // Handle spec changes
     const handleSpecChange = (index, field, value) => {
         const newSpecs = [...formData.specs];
         if (!newSpecs[index]) newSpecs[index] = { name: '', value: '' };
@@ -280,7 +347,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         setFormData(prev => ({ ...prev, specs: newSpecs }));
     };
 
-    // Add new spec (same as before)
+    // Add new spec
     const addSpec = () => {
         setFormData(prev => ({ 
             ...prev, 
@@ -288,20 +355,20 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         }));
     };
 
-    // Remove spec (same as before)
+    // Remove spec
     const removeSpec = (index) => {
         const newSpecs = formData.specs.filter((_, i) => i !== index);
         setFormData(prev => ({ ...prev, specs: newSpecs }));
     };
 
-    // Handle part name changes (same as before)
+    // Handle part name changes
     const handlePartNameChange = (index, value) => {
         const newParts = [...formData.partNames];
         newParts[index] = value;
         setFormData(prev => ({ ...prev, partNames: newParts }));
     };
 
-    // Add new part name (same as before)
+    // Add new part name
     const addPartName = () => {
         if (formData.partNames.length < 5) {
             setFormData(prev => ({ 
@@ -311,7 +378,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         }
     };
 
-    // Remove part name (same as before)
+    // Remove part name
     const removePartName = (index) => {
         const newParts = formData.partNames.filter((_, i) => i !== index);
         setFormData(prev => ({ ...prev, partNames: newParts }));
@@ -322,18 +389,34 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
         const files = Array.from(e.target.files);
         if (files.length === 0) return;
 
+        setImageFiles(files);
         setImageUploading(true);
+        setSubmitError(null);
+
         try {
             for (const file of files) {
-                if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                if (file.size > 10 * 1024 * 1024) {
                     setSubmitError(`File ${file.name} is too large. Max size is 10MB.`);
                     continue;
                 }
 
-                // Create FormData for file upload
+                // Convert file to base64
+                const reader = new FileReader();
+                const base64Data = await new Promise((resolve, reject) => {
+                    reader.onload = () => {
+                        const base64String = reader.result.split(',')[1];
+                        resolve(base64String);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+
+                // Upload to Google Apps Script
                 const formData = new FormData();
                 formData.append('action', 'uploadFile');
-                formData.append('file', file);
+                formData.append('base64Data', base64Data);
+                formData.append('fileName', file.name);
+                formData.append('mimeType', file.type);
                 formData.append('folderId', '1nJIhEL_6BTLuZ3mu3XLPJOES-95ZlFwf');
                 
                 const response = await fetch('https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec', {
@@ -348,7 +431,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                         name: file.name,
                         url: data.fileUrl,
                         size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
-                        driveId: data.fileId
+                        driveId: extractDriveId(data.fileUrl)
                     }]);
                 } else {
                     setSubmitError(`Failed to upload ${file.name}: ${data.error || 'Unknown error'}`);
@@ -365,6 +448,64 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
     // Remove uploaded image
     const removeImage = (index) => {
         setUploadedImages(prev => prev.filter((_, i) => i !== index));
+        setImageFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Helper function to submit data to specific sheet
+    const submitToSheet = async (sheetName, rowData) => {
+        try {
+            const response = await fetch('https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    action: 'insert',
+                    sheetName: sheetName,
+                    rowData: JSON.stringify(rowData)
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(`Failed to save to ${sheetName}: ${result.error}`);
+            }
+            
+            return result;
+        } catch (error) {
+            console.error(`Error submitting to ${sheetName}:`, error);
+            throw error;
+        }
+    };
+
+    // Update data in specific sheet
+    const updateInSheet = async (sheetName, rowIndex, rowData) => {
+        try {
+            const response = await fetch('https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    action: 'update',
+                    sheetName: sheetName,
+                    rowIndex: rowIndex.toString(),
+                    rowData: JSON.stringify(rowData)
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(`Failed to update in ${sheetName}: ${result.error}`);
+            }
+            
+            return result;
+        } catch (error) {
+            console.error(`Error updating in ${sheetName}:`, error);
+            throw error;
+        }
     };
 
     // Handle form submission
@@ -384,47 +525,102 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                 throw new Error('Serial Number is required');
             }
 
-            // Get formatted timestamp for all submissions
-            const currentTimestamp = formatTimestamp();
+            // Get current timestamp
+            const currentTimestamp = new Date().toISOString();
             
             if (product) {
                 // EDIT MODE - Update existing product
                 
                 // 1. Update main product information in Products sheet
-                const mainProductData = {
-                    ...formData,
-                    // Convert numeric strings to numbers
-                    assetValue: parseFloat(formData.assetValue) || 0,
-                    quantity: parseInt(formData.quantity) || 1,
-                    repairCost: parseFloat(formData.repairCost) || 0,
-                    repairCount: parseInt(formData.repairCount) || 0,
-                    totalRepairCost: parseFloat(formData.totalRepairCost) || 0,
-                    depRate: parseFloat(formData.depRate) || 10,
-                    assetLife: parseInt(formData.assetLife) || 5,
-                    residualValue: parseFloat(formData.residualValue) || 0,
-                    updatedBy: 'admin',
-                    updatedDate: currentTimestamp, // Formatted timestamp
-                    // Add image URL if uploaded
-                    image_url: uploadedImages.length > 0 ? uploadedImages[0].url : product.image_url || '',
-                    tags: formData.category
-                };
+                const mainProductData = [
+                    currentTimestamp, // Timestamp
+                    formData.serialNo, // Serial No
+                    formData.productName, // Product Name
+                    formData.category, // Category
+                    formData.type, // Type
+                    formData.brand, // Brand
+                    formData.model, // Model
+                    formData.sku, // SKU
+                    formatDateToDMY(formData.mfgDate), // Mfg Date
+                    formData.origin, // Origin
+                    formData.status, // Status
+                    formatDateToDMY(formData.assetDate), // Asset Date
+                    formData.invoiceNo, // Invoice No
+                    parseFloat(formData.assetValue) || 0, // Cost
+                    parseInt(formData.quantity) || 1, // Qty
+                    formData.supplierName, // Supplier
+                    formData.paymentMode, // Payment
+                    formData.location, // Location
+                    formData.department, // Department
+                    formData.assignedTo, // Assigned To
+                    formData.responsiblePerson, // Responsible
+                    formData.warrantyAvailable, // Warranty
+                    formData.amc, // AMC
+                    formData.maintenanceRequired, // Maintenance
+                    formData.priority, // Priority
+                    formatDateToDMY(formData.lastRepairDate), // Last Repair
+                    parseFloat(formData.repairCost) || 0, // Last Cost
+                    formData.partChanged, // Part Chg?
+                    formData.partNames[0] || '', // Part 1
+                    formData.partNames[1] || '', // Part 2
+                    formData.partNames[2] || '', // Part 3
+                    formData.partNames[3] || '', // Part 4
+                    formData.partNames[4] || '', // Part 5
+                    '0', // Count (removed as requested)
+                    '0', // Total Cost (removed as requested)
+                    parseFloat(formData.assetValue) || 0, // Asset Value
+                    formData.depMethod, // Dep. Method
+                    'admin', // Created By
+                    product.id || '', // id
+                    formData.supplierPhone, // supplierPhone
+                    formData.supplierEmail, // supplierEmail
+                    formData.usageType, // usageType
+                    formData.storageLoc, // storageLoc
+                    formData.warrantyProvider, // warrantyProvider
+                    formatDateToDMY(formData.warrantyStart), // warrantyStart
+                    formatDateToDMY(formData.warrantyEnd), // warrantyEnd
+                    formData.amcProvider, // amcProvider
+                    formatDateToDMY(formData.amcStart), // amcStart
+                    formatDateToDMY(formData.amcEnd), // amcEnd
+                    formData.serviceContact, // serviceContact
+                    formData.maintenanceType, // maintenanceType
+                    formData.frequency, // frequency
+                    formatDateToDMY(formData.nextService), // nextService
+                    formData.technician, // technician
+                    formData.maintenanceNotes, // maintenanceNotes
+                    parseFloat(formData.depRate) || 10, // depRate
+                    parseInt(formData.assetLife) || 5, // assetLife
+                    parseFloat(formData.residualValue) || 0, // residualValue
+                    formData.internalNotes, // internalNotes
+                    formData.usageRemarks, // usageRemarks
+                    formData.condition, // condition
+                    'admin', // updatedBy
+                    currentTimestamp, // updatedDate
+                    product.qr_code_url || '', // qr_code_url
+                    uploadedImages.length > 0 ? uploadedImages[0].url : (product.image_url || ''), // image_url
+                    formData.category, // tags
+                    '1' // edition
+                ];
+                
+                // Update main product in Products sheet
+                await updateInSheet('Products', product.rowIndex || 2, mainProductData);
                 
                 // 2. If there are repair details, add to Product_Repairs sheet
                 if (formData.lastRepairDate && formData.repairCost && formData.repairCost !== '0') {
-                    const repairData = {
-                        'Product SN': formData.serialNo,
-                        'Repair Date': formData.lastRepairDate,
-                        'Repair Cost': parseFloat(formData.repairCost) || 0,
-                        'Part Changed': formData.partChanged,
-                        'Part 1': formData.partNames[0] || '',
-                        'Part 2': formData.partNames[1] || '',
-                        'Part 3': formData.partNames[2] || '',
-                        'Part 4': formData.partNames[3] || '',
-                        'Part 5': formData.partNames[4] || '',
-                        'Technician': formData.repairTechnician || '',
-                        'Remarks': formData.repairRemarks || '',
-                        'Created Date': currentTimestamp // Formatted timestamp
-                    };
+                    const repairData = [
+                        formData.serialNo, // Product SN
+                        formatDateToDMY(formData.lastRepairDate), // Repair Date
+                        parseFloat(formData.repairCost) || 0, // Repair Cost
+                        formData.partChanged, // Part Changed
+                        formData.partNames[0] || '', // Part 1
+                        formData.partNames[1] || '', // Part 2
+                        formData.partNames[2] || '', // Part 3
+                        formData.partNames[3] || '', // Part 4
+                        formData.partNames[4] || '', // Part 5
+                        formData.repairTechnician || '', // Technician
+                        formData.repairRemarks || '', // Remarks
+                        currentTimestamp // Created Date
+                    ];
                     
                     // Submit to Product_Repairs sheet
                     await submitToSheet('Product_Repairs', repairData);
@@ -432,17 +628,17 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                 
                 // 3. If there are maintenance details, add to Product_Maintenance sheet
                 if (formData.maintenanceRequired === 'Yes') {
-                    const maintenanceData = {
-                        'Product SN': formData.serialNo,
-                        'Maintenance Required': formData.maintenanceRequired,
-                        'Maintenance Type': formData.maintenanceType,
-                        'Frequency': formData.frequency,
-                        'Next Service Date': formData.nextService,
-                        'Priority': formData.priority,
-                        'Technician': formData.technician,
-                        'Notes': formData.maintenanceNotes,
-                        'Created Date': currentTimestamp // Formatted timestamp
-                    };
+                    const maintenanceData = [
+                        formData.serialNo, // Product SN
+                        formData.maintenanceRequired, // Maintenance Required
+                        formData.maintenanceType, // Maintenance Type
+                        formData.frequency, // Frequency
+                        formatDateToDMY(formData.nextService), // Next Service Date
+                        formData.priority, // Priority
+                        formData.technician, // Technician
+                        formData.maintenanceNotes, // Notes
+                        currentTimestamp // Created Date
+                    ];
                     
                     // Submit to Product_Maintenance sheet
                     await submitToSheet('Product_Maintenance', maintenanceData);
@@ -450,23 +646,24 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                 
                 // 4. If there are specs, add to Product_Specs sheet
                 if (formData.specs.length > 0) {
+                    // First, delete existing specs for this product
+                    // Note: You might want to implement a delete function for specs
+                    // For now, we'll just add new ones
+                    
                     for (const spec of formData.specs) {
                         if (spec.name && spec.value) {
-                            const specData = {
-                                'Product SN': formData.serialNo,
-                                'Spec Name': spec.name,
-                                'Spec Value': spec.value,
-                                'Created Date': currentTimestamp // Formatted timestamp
-                            };
+                            const specData = [
+                                formData.serialNo, // Product SN
+                                spec.name, // Spec Name
+                                spec.value, // Spec Value
+                                currentTimestamp // Created Date
+                            ];
                             
                             // Submit to Product_Specs sheet
                             await submitToSheet('Product_Specs', specData);
                         }
                     }
                 }
-                
-                // 5. Update main product in Products sheet
-                await updateProduct(product.id, mainProductData);
                 
                 setSubmitSuccess(true);
                 setTimeout(() => {
@@ -478,100 +675,95 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                 // ADD MODE - Create new product
                 
                 // 1. Prepare main product data for Products sheet
-                const mainProductData = {
-                    // Map form fields to sheet columns
-                    'Timestamp': currentTimestamp, // Formatted timestamp
-                    'Serial No': formData.serialNo,
-                    'Product Name': formData.productName,
-                    'Category': formData.category,
-                    'Type': formData.type,
-                    'Brand': formData.brand,
-                    'Model': formData.model,
-                    'SKU': formData.sku,
-                    'Mfg Date': formData.mfgDate,
-                    'Origin': formData.origin,
-                    'Status': formData.status,
-                    'Asset Date': formData.assetDate,
-                    'Invoice No': formData.invoiceNo,
-                    'Cost': parseFloat(formData.assetValue) || 0,
-                    'Qty': parseInt(formData.quantity) || 1,
-                    'Supplier': formData.supplierName,
-                    'Payment': formData.paymentMode,
-                    'Location': formData.location,
-                    'Department': formData.department,
-                    'Assigned To': formData.assignedTo,
-                    'Responsible': formData.responsiblePerson,
-                    'Warranty': formData.warrantyAvailable,
-                    'AMC': formData.amc,
-                    'Maintenance': formData.maintenanceRequired,
-                    'Priority': formData.priority,
-                    'Last Repair': formData.lastRepairDate || '',
-                    'Last Cost': parseFloat(formData.repairCost) || 0,
-                    'Part Chg?': formData.partChanged,
-                    'Part 1': formData.partNames[0] || '',
-                    'Part 2': formData.partNames[1] || '',
-                    'Part 3': formData.partNames[2] || '',
-                    'Part 4': formData.partNames[3] || '',
-                    'Part 5': formData.partNames[4] || '',
-                    'Count': parseInt(formData.repairCount) || 0,
-                    'Total Cost': parseFloat(formData.totalRepairCost) || 0,
-                    'Asset Value': parseFloat(formData.assetValue) || 0,
-                    'Dep. Method': formData.depMethod,
-                    'Created By': 'admin',
-                    // New columns
-                    'id': '', // Will be auto-generated by sheet
-                    'supplierPhone': formData.supplierPhone,
-                    'supplierEmail': formData.supplierEmail,
-                    'usageType': formData.usageType,
-                    'storageLoc': formData.storageLoc,
-                    'warrantyProvider': formData.warrantyProvider,
-                    'warrantyStart': formData.warrantyStart,
-                    'warrantyEnd': formData.warrantyEnd,
-                    'amcProvider': formData.amcProvider,
-                    'amcStart': formData.amcStart,
-                    'amcEnd': formData.amcEnd,
-                    'serviceContact': formData.serviceContact,
-                    'maintenanceType': formData.maintenanceType,
-                    'frequency': formData.frequency,
-                    'nextService': formData.nextService,
-                    'technician': formData.technician,
-                    'maintenanceNotes': formData.maintenanceNotes,
-                    'depRate': parseFloat(formData.depRate) || 10,
-                    'assetLife': parseInt(formData.assetLife) || 5,
-                    'residualValue': parseFloat(formData.residualValue) || 0,
-                    'internalNotes': formData.internalNotes,
-                    'usageRemarks': formData.usageRemarks,
-                    'condition': formData.condition,
-                    'updatedBy': '',
-                    'updatedDate': '',
-                    'qr_code_url': '',
-                    'image_url': uploadedImages.length > 0 ? uploadedImages[0].url : '',
-                    'tags': formData.category,
-                    // Add edition column
-                    'edition': '1', // Default edition
-                    'updatedBy': 'admin',
-                    'updatedDate': currentTimestamp // Formatted timestamp
-                };
+                const mainProductData = [
+                    currentTimestamp, // Timestamp
+                    formData.serialNo, // Serial No
+                    formData.productName, // Product Name
+                    formData.category, // Category
+                    formData.type, // Type
+                    formData.brand, // Brand
+                    formData.model, // Model
+                    formData.sku, // SKU
+                    formatDateToDMY(formData.mfgDate), // Mfg Date
+                    formData.origin, // Origin
+                    formData.status, // Status
+                    formatDateToDMY(formData.assetDate), // Asset Date
+                    formData.invoiceNo, // Invoice No
+                    parseFloat(formData.assetValue) || 0, // Cost
+                    parseInt(formData.quantity) || 1, // Qty
+                    formData.supplierName, // Supplier
+                    formData.paymentMode, // Payment
+                    formData.location, // Location
+                    formData.department, // Department
+                    formData.assignedTo, // Assigned To
+                    formData.responsiblePerson, // Responsible
+                    formData.warrantyAvailable, // Warranty
+                    formData.amc, // AMC
+                    formData.maintenanceRequired, // Maintenance
+                    formData.priority, // Priority
+                    formatDateToDMY(formData.lastRepairDate), // Last Repair
+                    parseFloat(formData.repairCost) || 0, // Last Cost
+                    formData.partChanged, // Part Chg?
+                    formData.partNames[0] || '', // Part 1
+                    formData.partNames[1] || '', // Part 2
+                    formData.partNames[2] || '', // Part 3
+                    formData.partNames[3] || '', // Part 4
+                    formData.partNames[4] || '', // Part 5
+                    '0', // Count (removed as requested)
+                    '0', // Total Cost (removed as requested)
+                    parseFloat(formData.assetValue) || 0, // Asset Value
+                    formData.depMethod, // Dep. Method
+                    'admin', // Created By
+                    '', // id (will be auto-generated)
+                    formData.supplierPhone, // supplierPhone
+                    formData.supplierEmail, // supplierEmail
+                    formData.usageType, // usageType
+                    formData.storageLoc, // storageLoc
+                    formData.warrantyProvider, // warrantyProvider
+                    formatDateToDMY(formData.warrantyStart), // warrantyStart
+                    formatDateToDMY(formData.warrantyEnd), // warrantyEnd
+                    formData.amcProvider, // amcProvider
+                    formatDateToDMY(formData.amcStart), // amcStart
+                    formatDateToDMY(formData.amcEnd), // amcEnd
+                    formData.serviceContact, // serviceContact
+                    formData.maintenanceType, // maintenanceType
+                    formData.frequency, // frequency
+                    formatDateToDMY(formData.nextService), // nextService
+                    formData.technician, // technician
+                    formData.maintenanceNotes, // maintenanceNotes
+                    parseFloat(formData.depRate) || 10, // depRate
+                    parseInt(formData.assetLife) || 5, // assetLife
+                    parseFloat(formData.residualValue) || 0, // residualValue
+                    formData.internalNotes, // internalNotes
+                    formData.usageRemarks, // usageRemarks
+                    formData.condition, // condition
+                    '', // updatedBy
+                    '', // updatedDate
+                    '', // qr_code_url
+                    uploadedImages.length > 0 ? uploadedImages[0].url : '', // image_url
+                    formData.category, // tags
+                    '1' // edition
+                ];
                 
                 // 2. Submit main product to Products sheet
                 await submitToSheet('Products', mainProductData);
                 
                 // 3. If there are repair details, add to Product_Repairs sheet
                 if (formData.lastRepairDate && formData.repairCost && formData.repairCost !== '0') {
-                    const repairData = {
-                        'Product SN': formData.serialNo,
-                        'Repair Date': formData.lastRepairDate,
-                        'Repair Cost': parseFloat(formData.repairCost) || 0,
-                        'Part Changed': formData.partChanged,
-                        'Part 1': formData.partNames[0] || '',
-                        'Part 2': formData.partNames[1] || '',
-                        'Part 3': formData.partNames[2] || '',
-                        'Part 4': formData.partNames[3] || '',
-                        'Part 5': formData.partNames[4] || '',
-                        'Technician': formData.repairTechnician || '',
-                        'Remarks': formData.repairRemarks || '',
-                        'Created Date': currentTimestamp // Formatted timestamp
-                    };
+                    const repairData = [
+                        formData.serialNo, // Product SN
+                        formatDateToDMY(formData.lastRepairDate), // Repair Date
+                        parseFloat(formData.repairCost) || 0, // Repair Cost
+                        formData.partChanged, // Part Changed
+                        formData.partNames[0] || '', // Part 1
+                        formData.partNames[1] || '', // Part 2
+                        formData.partNames[2] || '', // Part 3
+                        formData.partNames[3] || '', // Part 4
+                        formData.partNames[4] || '', // Part 5
+                        formData.repairTechnician || '', // Technician
+                        formData.repairRemarks || '', // Remarks
+                        currentTimestamp // Created Date
+                    ];
                     
                     // Submit to Product_Repairs sheet
                     await submitToSheet('Product_Repairs', repairData);
@@ -579,17 +771,17 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                 
                 // 4. If there are maintenance details, add to Product_Maintenance sheet
                 if (formData.maintenanceRequired === 'Yes') {
-                    const maintenanceData = {
-                        'Product SN': formData.serialNo,
-                        'Maintenance Required': formData.maintenanceRequired,
-                        'Maintenance Type': formData.maintenanceType,
-                        'Frequency': formData.frequency,
-                        'Next Service Date': formData.nextService,
-                        'Priority': formData.priority,
-                        'Technician': formData.technician,
-                        'Notes': formData.maintenanceNotes,
-                        'Created Date': currentTimestamp // Formatted timestamp
-                    };
+                    const maintenanceData = [
+                        formData.serialNo, // Product SN
+                        formData.maintenanceRequired, // Maintenance Required
+                        formData.maintenanceType, // Maintenance Type
+                        formData.frequency, // Frequency
+                        formatDateToDMY(formData.nextService), // Next Service Date
+                        formData.priority, // Priority
+                        formData.technician, // Technician
+                        formData.maintenanceNotes, // Notes
+                        currentTimestamp // Created Date
+                    ];
                     
                     // Submit to Product_Maintenance sheet
                     await submitToSheet('Product_Maintenance', maintenanceData);
@@ -599,12 +791,12 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                 if (formData.specs.length > 0) {
                     for (const spec of formData.specs) {
                         if (spec.name && spec.value) {
-                            const specData = {
-                                'Product SN': formData.serialNo,
-                                'Spec Name': spec.name,
-                                'Spec Value': spec.value,
-                                'Created Date': currentTimestamp // Formatted timestamp
-                            };
+                            const specData = [
+                                formData.serialNo, // Product SN
+                                spec.name, // Spec Name
+                                spec.value, // Spec Value
+                                currentTimestamp // Created Date
+                            ];
                             
                             // Submit to Product_Specs sheet
                             await submitToSheet('Product_Specs', specData);
@@ -623,34 +815,6 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
             setSubmitError(error.message || 'Failed to save product. Please try again.');
         } finally {
             setIsSubmitting(false);
-        }
-    };
-
-    // Helper function to submit data to specific sheet
-    const submitToSheet = async (sheetName, data) => {
-        try {
-            // Convert object to array in correct column order
-            const rowData = Object.values(data);
-            
-            const response = await fetch('https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec', {
-                method: 'POST',
-                body: new URLSearchParams({
-                    action: 'insert',
-                    sheetName: sheetName,
-                    rowData: JSON.stringify(rowData)
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (!result.success) {
-                throw new Error(`Failed to save to ${sheetName}: ${result.error}`);
-            }
-            
-            return result;
-        } catch (error) {
-            console.error(`Error submitting to ${sheetName}:`, error);
-            throw error;
         }
     };
 
@@ -761,7 +925,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                                     value={formData.serialNo}
                                     onChange={handleChange}
                                     required
-                                    disabled={!!product} // Disable editing of SN for existing products
+                                    disabled={!!product}
                                     placeholder="Auto-generated (e.g., SN-0001)"
                                 />
                                 <InputField 
@@ -1299,22 +1463,7 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                                     onChange={handleChange}
                                     placeholder="Repair details or notes"
                                 />
-                                <InputField 
-                                    label="Repair Count" 
-                                    name="repairCount" 
-                                    type="number"
-                                    value={formData.repairCount}
-                                    onChange={handleChange}
-                                    placeholder="Number of repairs"
-                                />
-                                <InputField 
-                                    label="Total Repair Cost (₹)" 
-                                    name="totalRepairCost" 
-                                    type="number"
-                                    value={formData.totalRepairCost}
-                                    onChange={handleChange}
-                                    placeholder="Total repair cost"
-                                />
+                                {/* Removed Repair Count and Total Repair Cost as requested */}
                                 <InputField 
                                     label="Part Changed?" 
                                     name="partChanged" 
@@ -1363,11 +1512,6 @@ const AddProductModal = ({ isOpen, onClose, product = null }) => {
                         <span className="text-red-500">*</span> Required fields
                         <div className="mt-1 text-xs text-slate-400">
                             Serial No: <span className="font-medium">{formData.serialNo}</span>
-                            {product && (
-                                <span className="ml-4">
-                                    Last updated: {product.updatedDate ? formatTimestamp(product.updatedDate) : 'Never'}
-                                </span>
-                            )}
                         </div>
                     </div>
                     <div className="flex gap-4">
