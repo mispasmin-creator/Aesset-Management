@@ -29,7 +29,7 @@ const Settings = () => {
         status: 'Active'
     });
 
-    const apiUrl = "https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec";
+    const apiUrl = "https://script.google.com/macros/s/AKfycbyKUvX_uKYhR0j1lfZ1C7Qb2u9bygHTzf__nbuYE1atWWlEikxYQdklOvfSy5D0BYQJ/exec";
     const sheetName = "USER";
 
     // Fetch users from Google Sheet - UPDATED to match your AuthContext pattern

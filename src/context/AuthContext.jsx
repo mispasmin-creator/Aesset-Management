@@ -4,7 +4,7 @@ const AuthContext = createContext(null);
 
 // ✅ Your EXISTING Apps Script Web App URL
 const SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec";
+  "https://script.google.com/macros/s/AKfycbyKUvX_uKYhR0j1lfZ1C7Qb2u9bygHTzf__nbuYE1atWWlEikxYQdklOvfSy5D0BYQJ/exec";
 
 export const AuthProvider = ({ children }) => {
 

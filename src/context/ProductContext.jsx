@@ -12,7 +12,7 @@ export const ProductProvider = ({ children }) => {
     const [maintenanceData, setMaintenanceData] = useState({});
     const [specsData, setSpecsData] = useState({});
     
-    const APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyzZ_KxsII2w95PsqH3JprWCCiQRehkRTrnNQmQWVWYX8vosFClyTtTSawjAUPzDs9a/exec";
+    const APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyKUvX_uKYhR0j1lfZ1C7Qb2u9bygHTzf__nbuYE1atWWlEikxYQdklOvfSy5D0BYQJ/exec";
     
     // Comprehensive header to property mapping
     const mapHeaderToProperty = (header) => {

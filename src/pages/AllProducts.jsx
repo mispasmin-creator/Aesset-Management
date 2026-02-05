@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, RefreshCw, QrCode, FileText, Pencil, AlertCircle, Loader } from 'lucide-react';
+import { Plus, Search, Filter, RefreshCw, QrCode, FileText, Pencil, AlertCircle, Loader,Image  } from 'lucide-react';
 import { useProduct } from '../context/ProductContext';
 import AddProductModal from '../components/AddProductModal';
 import QRCodeModal from '../components/QRCodeModal';
@@ -48,6 +48,8 @@ const ProductCard = ({ product, onShowQR, onEdit }) => {
                     <p className="text-[10px] text-slate-400 uppercase tracking-wide">Location</p>
                     <p className="text-xs font-semibold text-slate-700 truncate">{product.location || 'N/A'}</p>
                 </div>
+
+
                 <div className="text-center border-l border-slate-100">
                     <p className="text-[10px] text-slate-400 uppercase tracking-wide">Dept</p>
                     <p className="text-xs font-semibold text-slate-700 truncate">{product.department || 'N/A'}</p>
@@ -136,7 +138,7 @@ const AllProducts = () => {
     const fixedColumnOrder = [
         'serialNo', 'productName', 'category', 'type', 'brand', 'model', 'sku', 
         'mfgDate', 'origin', 'status', 'assetDate', 'invoiceNo', 'cost', 
-        'quantity', 'supplier', 'payment', 'location', 'department', 
+        'quantity', 'supplier', 'payment', 'location', 'image_url', 'department', 
         'assignedTo', 'responsible', 'warranty', 'amc', 'maintenance', 
         'priority', 'lastRepair', 'lastCost', 'partChanged', 'part1', 
         'part2', 'part3', 'part4', 'part5', 'count', 'totalCost', 
@@ -168,6 +170,7 @@ const AllProducts = () => {
         'supplier': { label: 'Supplier', width: '150px' },
         'payment': { label: 'Payment', width: '100px' },
         'location': { label: 'Location', width: '150px' },
+        'image_url': { label: 'Image', width: '80px' }, // <-- ADD THIS LINE HERE
         'department': { label: 'Department', width: '120px' },
         'assignedTo': { label: 'Assigned To', width: '150px' },
         'responsible': { label: 'Responsible', width: '150px' },
@@ -226,22 +229,14 @@ const AllProducts = () => {
             setDebugInfo(`Loaded ${products.length} products`);
             
             // Create columns based on fixed order, only include if the key exists in data
-            const columnsArray = fixedColumnOrder
-                .filter(key => {
-                    // Check if any product has this key with a value
-                    const hasKey = products.some(product => 
-                        product[key] !== undefined && product[key] !== null && product[key] !== ''
-                    );
-                    return hasKey;
-                })
-                .map(key => {
-                    const config = columnConfigs[key];
-                    return {
-                        key,
-                        label: config ? config.label : key.charAt(0).toUpperCase() + key.slice(1),
-                        width: config ? config.width : '120px'
-                    };
-                });
+           const columnsArray = fixedColumnOrder.map(key => {
+  const config = columnConfigs[key];
+  return {
+    key,
+    label: config ? config.label : key.charAt(0).toUpperCase() + key.slice(1),
+    width: config ? config.width : '120px'
+  };
+});
             
             console.log("📊 Visible columns configured:", columnsArray.length);
             console.log("📋 Column list:", columnsArray.map(c => c.label).join(', '));
@@ -304,7 +299,9 @@ const AllProducts = () => {
                 return `₹${parseFloat(value).toLocaleString('en-IN')}`;
             }
         }
-        
+          if (columnKey === 'image_url') {
+        return value;
+                }
         // Handle boolean-like values
         if (['warranty', 'amc', 'partChanged', 'maintenance'].includes(columnKey)) {
             return value === 'Yes' || value === true ? 'Yes' : value === 'No' || value === false ? 'No' : value;
@@ -483,39 +480,64 @@ const AllProducts = () => {
                                         </td>
                                         
                                         {/* All Columns Data in Fixed Order */}
-                                        {visibleColumns.map((column) => {
-                                            const value = product[column.key];
-                                            const displayValue = formatCellValue(value, column.key);
-                                            
-                                            return (
-                                                <td 
-                                                    key={`${product.id || index}-${column.key}`} 
-                                                    className="px-3 py-3 text-slate-700 border-r border-slate-50"
-                                                >
-                                                    {column.key === 'status' ? (
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'Active' ? 'bg-green-100 text-green-800' : displayValue === 'Inactive' ? 'bg-red-100 text-red-800' : displayValue === 'Under Maintenance' ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-100 text-slate-800'}`}>
-                                                            {displayValue}
-                                                        </span>
-                                                    ) : column.key === 'priority' ? (
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'High' || displayValue === 'Critical' ? 'bg-red-100 text-red-800' : displayValue === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
-                                                            {displayValue}
-                                                        </span>
-                                                    ) : column.key === 'condition' ? (
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'Excellent' ? 'bg-green-100 text-green-800' : displayValue === 'Good' ? 'bg-blue-100 text-blue-800' : displayValue === 'Fair' ? 'bg-yellow-100 text-yellow-800' : displayValue === 'Poor' || displayValue === 'Needs Repair' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-800'}`}>
-                                                            {displayValue}
-                                                        </span>
-                                                    ) : ['warranty', 'amc', 'partChanged', 'maintenance'].includes(column.key) ? (
-                                                        <span className={`font-medium ${displayValue === 'Yes' ? 'text-green-600' : displayValue === 'No' ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                            {displayValue}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="truncate max-w-xs block" title={displayValue}>
-                                                            {displayValue}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            );
-                                        })}
+{visibleColumns.map((column) => {
+   const rawValue =
+    column.key === 'image_url'
+        ? product.image_url || product.imageUrl || product.image || ''
+        : product[column.key];
+
+const value =
+    column.key === 'image_url' && rawValue.includes('drive.google.com/file/d/')
+        ? rawValue.replace(
+            /https:\/\/drive\.google\.com\/file\/d\/([^/]+).*/,
+            'https://drive.google.com/uc?export=view&id=$1'
+          )
+        : rawValue;
+
+    const displayValue = formatCellValue(value, column.key);
+
+    return (
+        <td key={column.key} className="px-3 py-3 border-r border-slate-100 whitespace-nowrap">
+           {column.key === 'image_url' && value && value.startsWith('http') ? (
+  <div className="flex flex-col items-center gap-1">
+    <img
+      src={value}
+    />
+    <a
+      href={value}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-xs text-blue-600 underline"
+    >
+      View
+    </a>
+  </div>
+) : column.key === 'image_url' ? (
+  <span className="text-xs text-slate-400">No Image</span>
+) : column.key === 'status' ? (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'Active' ? 'bg-green-100 text-green-800' : displayValue === 'Inactive' ? 'bg-red-100 text-red-800' : displayValue === 'Under Maintenance' ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-100 text-slate-800'}`}>
+                    {displayValue}
+                </span>
+            ) : column.key === 'priority' ? (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'High' || displayValue === 'Critical' ? 'bg-red-100 text-red-800' : displayValue === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
+                    {displayValue}
+                </span>
+            ) : column.key === 'condition' ? (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${displayValue === 'Excellent' ? 'bg-green-100 text-green-800' : displayValue === 'Good' ? 'bg-blue-100 text-blue-800' : displayValue === 'Fair' ? 'bg-yellow-100 text-yellow-800' : displayValue === 'Poor' || displayValue === 'Needs Repair' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-800'}`}>
+                    {displayValue}
+                </span>
+            ) : ['warranty', 'amc', 'partChanged', 'maintenance'].includes(column.key) ? (
+                <span className={`font-medium ${displayValue === 'Yes' ? 'text-green-600' : displayValue === 'No' ? 'text-slate-400' : 'text-slate-600'}`}>
+                    {displayValue}
+                </span>
+            ) : (
+                <span className="truncate max-w-xs block" title={displayValue}>
+                    {displayValue}
+                </span>
+            )}
+        </td>
+    );
+})}
                                     </tr>
                                 ))
                             ) : (
